@@ -21,7 +21,8 @@ const SURF_SPOTS = [
   { name: 'Sennen Cove',       lat: 50.0703, lon: -5.6986 },
   { name: 'Bude',              lat: 50.8272, lon: -4.5436 },
   { name: 'Croyde',            lat: 51.1236, lon: -4.2282 },
-  { name: 'Saunton Sands',     lat: 51.1197, lon: -4.2322 },
+  { name: 'Saunton Sands',     lat: 51.1000, lon: -4.2100 },
+  { name: 'Putsborough',       lat: 51.1406, lon: -4.2469 },
   { name: 'Saltburn',          lat: 54.5844, lon: -0.9728 },
   { name: 'Thurso East',       lat: 58.5936, lon: -3.5239 },
   { name: 'Tiree',             lat: 56.5000, lon: -6.9167 },
@@ -326,37 +327,31 @@ async function fetchOSMSpots(lat, lon) {
     .filter(s => s.lat != null);
 }
 
-// Show loading state immediately, then populate from OSM (fallback to hardcoded list)
+// Always merge OSM results with hardcoded list, dedupe at 0.3 km
 function renderNearbySpots(lat, lon) {
   nearbySpotsEl.innerHTML = '<span class="nearby-label">Nearby spots:</span><span class="nearby-loading">…</span>';
   nearbySpotsEl.classList.remove('hidden');
 
   fetchOSMSpots(lat, lon)
-    .then(osmSpots => {
-      // Rank by distance, deduplicate spots within 2 km of each other
-      const ranked = osmSpots
-        .map(s => ({ ...s, dist: haversine(lat, lon, s.lat, s.lon) }))
-        .sort((a, b) => a.dist - b.dist);
+    .then(osmSpots => mergeAndPaint(lat, lon, osmSpots))
+    .catch(()      => mergeAndPaint(lat, lon, []));
+}
 
-      const deduped = [];
-      for (const s of ranked) {
-        if (!deduped.some(e => haversine(s.lat, s.lon, e.lat, e.lon) < 2)) {
-          deduped.push(s);
-          if (deduped.length === 3) break;
-        }
-      }
-      // If OSM gave us fewer than 3 results, pad with hardcoded fallback
-      if (deduped.length < 3) {
-        for (const s of nearestSpots(lat, lon)) {
-          if (!deduped.some(e => haversine(s.lat, s.lon, e.lat, e.lon) < 5)) {
-            deduped.push(s);
-            if (deduped.length === 3) break;
-          }
-        }
-      }
-      paintSpotButtons(deduped, lat, lon);
-    })
-    .catch(() => paintSpotButtons(nearestSpots(lat, lon), lat, lon));
+function mergeAndPaint(lat, lon, osmSpots) {
+  // Combine OSM results with the hardcoded list, ranked by distance
+  const all = [...osmSpots, ...SURF_SPOTS]
+    .map(s => ({ ...s, dist: haversine(lat, lon, s.lat, s.lon) }))
+    .sort((a, b) => a.dist - b.dist);
+
+  // Deduplicate at 0.3 km so adjacent beaches (Croyde/Saunton) both appear
+  const picks = [];
+  for (const s of all) {
+    if (!picks.some(e => haversine(s.lat, s.lon, e.lat, e.lon) < 0.3)) {
+      picks.push(s);
+      if (picks.length === 4) break;
+    }
+  }
+  paintSpotButtons(picks, lat, lon);
 }
 
 function paintSpotButtons(spots, lat, lon) {
