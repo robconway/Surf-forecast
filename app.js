@@ -199,22 +199,65 @@ function nearestSpots(lat, lon, n = 3) {
     .slice(0, n);
 }
 
-function renderNearbySpots(lat, lon) {
-  nearbySpotsEl.innerHTML = '';
-  const label = document.createElement('span');
-  label.className = 'nearby-label';
-  label.textContent = 'Nearby spots:';
-  nearbySpotsEl.appendChild(label);
+// Query OpenStreetMap via Overpass API for real surf spots nearby
+async function fetchOSMSpots(lat, lon) {
+  const q = `[out:json][timeout:10];(node["sport"="surfing"](around:300000,${lat},${lon});way["sport"="surfing"](around:300000,${lat},${lon}););out center;`;
+  const res = await fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(q)}`);
+  if (!res.ok) throw new Error('Overpass error');
+  const data = await res.json();
+  return data.elements
+    .filter(el => el.tags?.name)
+    .map(el => ({
+      name: el.tags.name,
+      lat:  el.lat  ?? el.center?.lat,
+      lon:  el.lon  ?? el.center?.lon,
+    }))
+    .filter(s => s.lat != null);
+}
 
-  nearestSpots(lat, lon).forEach(s => {
-    const btn = document.createElement('button');
+// Show loading state immediately, then populate from OSM (fallback to hardcoded list)
+function renderNearbySpots(lat, lon) {
+  nearbySpotsEl.innerHTML = '<span class="nearby-label">Nearby spots:</span><span class="nearby-loading">…</span>';
+  nearbySpotsEl.classList.remove('hidden');
+
+  fetchOSMSpots(lat, lon)
+    .then(osmSpots => {
+      // Rank by distance, deduplicate spots within 2 km of each other
+      const ranked = osmSpots
+        .map(s => ({ ...s, dist: haversine(lat, lon, s.lat, s.lon) }))
+        .sort((a, b) => a.dist - b.dist);
+
+      const deduped = [];
+      for (const s of ranked) {
+        if (!deduped.some(e => haversine(s.lat, s.lon, e.lat, e.lon) < 2)) {
+          deduped.push(s);
+          if (deduped.length === 3) break;
+        }
+      }
+      // If OSM gave us fewer than 3 results, pad with hardcoded fallback
+      if (deduped.length < 3) {
+        for (const s of nearestSpots(lat, lon)) {
+          if (!deduped.some(e => haversine(s.lat, s.lon, e.lat, e.lon) < 5)) {
+            deduped.push(s);
+            if (deduped.length === 3) break;
+          }
+        }
+      }
+      paintSpotButtons(deduped, lat, lon);
+    })
+    .catch(() => paintSpotButtons(nearestSpots(lat, lon), lat, lon));
+}
+
+function paintSpotButtons(spots, lat, lon) {
+  nearbySpotsEl.innerHTML = '<span class="nearby-label">Nearby spots:</span>';
+  spots.forEach(s => {
+    const dist = s.dist ?? haversine(lat, lon, s.lat, s.lon);
+    const btn  = document.createElement('button');
     btn.className = 'spot-btn';
-    btn.innerHTML = `${s.name} <span class="spot-dist">${Math.round(s.dist)}km</span>`;
+    btn.innerHTML = `${s.name} <span class="spot-dist">${Math.round(dist)}km</span>`;
     btn.addEventListener('click', () => loadForecast(s.lat, s.lon, s.name));
     nearbySpotsEl.appendChild(btn);
   });
-
-  nearbySpotsEl.classList.remove('hidden');
 }
 
 // ── API ───────────────────────────────────────────────────────────────────────
