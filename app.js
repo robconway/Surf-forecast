@@ -1,10 +1,12 @@
 'use strict';
 
-// ── Time slots shown in the forecast grid ─────────────────────────────────────
+// ── Time slots (MSW style: rows) ──────────────────────────────────────────────
 const SLOTS = [
-  { label: 'AM',   hour: 9  },
-  { label: 'PM',   hour: 14 },
-  { label: 'EVE',  hour: 18 },
+  { label: 'DAWN', hour: 6,  spread: 2 },
+  { label: 'AM',   hour: 9,  spread: 2 },
+  { label: 'NOON', hour: 12, spread: 1 },
+  { label: 'PM',   hour: 15, spread: 2 },
+  { label: 'DUSK', hour: 18, spread: 2 },
 ];
 
 // ── Global surf spots database ────────────────────────────────────────────────
@@ -253,6 +255,7 @@ function renderAll(lat, lon, name, marine, weather) {
   renderForecastGrid(mh, wh, baseIdx);
   renderTides(lat, lon);
   showApp();
+
 }
 
 function safeVal(arr, idx) {
@@ -269,6 +272,10 @@ function renderNowBanner(mh, wh, idx) {
   const windDir = safeVal(wh.winddirection_10m, idx);
   const stars   = surfStars(waveH, wavePer, windSpd, windDir, waveDir);
 
+  const waveHFt  = waveH  != null ? Math.round(waveH  * 3.281) : null;
+  const swellHFt = swellH != null ? Math.round(swellH * 3.281) : null;
+  const windMph  = windSpd != null ? Math.round(windSpd * 0.621) : null;
+
   nowBanner.innerHTML = `
     <div class="now-stat">
       <span class="ns-label">Now</span>
@@ -276,7 +283,7 @@ function renderNowBanner(mh, wh, idx) {
     </div>
     <div class="now-stat">
       <span class="ns-label">Waves</span>
-      <span class="ns-value ${waveClass(waveH)}">${fmt(waveH,1)}<small>m</small></span>
+      <span class="ns-value ${waveClass(waveH)}">${waveHFt ?? '—'}<small>ft</small></span>
     </div>
     <div class="now-stat">
       <span class="ns-label">Period</span>
@@ -284,11 +291,11 @@ function renderNowBanner(mh, wh, idx) {
     </div>
     <div class="now-stat">
       <span class="ns-label">Swell</span>
-      <span class="ns-value">${fmt(swellH,1)}<small>m</small></span>
+      <span class="ns-value">${swellHFt ?? '—'}<small>ft</small></span>
     </div>
     <div class="now-stat">
       <span class="ns-label">Wind</span>
-      <span class="ns-value ${windClass(windSpd,windDir,waveDir)}">${dirArrow(windDir)} ${fmt(windSpd,0)}<small>km/h</small></span>
+      <span class="ns-value ${windClass(windSpd,windDir,waveDir)}">${dirArrow(windDir)} ${windMph ?? '—'}<small>mph</small></span>
     </div>
     <div class="now-stat">
       <span class="ns-label">Direction</span>
@@ -297,102 +304,94 @@ function renderNowBanner(mh, wh, idx) {
   `;
 }
 
-// ── MSW-style forecast grid ───────────────────────────────────────────────────
+// ── MSW-style forecast: days as sections, time slots as rows ─────────────────
 function renderForecastGrid(mh, wh, baseIdx) {
-  const now  = new Date();
-  const days = [];
+  const now     = new Date();
+  const nowHour = now.getHours() + now.getMinutes() / 60;
+  let   html    = '';
 
   for (let d = 0; d < 7; d++) {
     const date = new Date(now);
     date.setDate(date.getDate() + d);
-    const slots = SLOTS.map(slot => {
+    const dayLabel = d === 0 ? 'Today'
+                   : d === 1 ? 'Tomorrow'
+                   : date.toLocaleDateString('en-GB', { weekday: 'long' });
+    const dateStr  = date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+
+    html += `<div class="msw-day">
+      <div class="msw-day-header">
+        <span class="msw-day-name">${dayLabel}</span>
+        <span class="msw-day-date">${dateStr}</span>
+      </div>
+      <div class="msw-col-hdrs">
+        <span></span><span>SURF</span><span>SWELL</span><span>WIND</span>
+      </div>`;
+
+    for (const slot of SLOTS) {
       const idx     = baseIdx + d * 24 + slot.hour;
       const waveH   = safeVal(mh.wave_height, idx);
       const wavePer = safeVal(mh.wave_period, idx);
       const waveDir = safeVal(mh.wave_direction, idx);
+      const swellH  = safeVal(mh.swell_wave_height, idx);
+      const swellPer= safeVal(mh.swell_wave_period, idx);
       const windSpd = safeVal(wh.windspeed_10m, idx);
       const windDir = safeVal(wh.winddirection_10m, idx);
-      return { label: slot.label, waveH, wavePer, waveDir, windSpd, windDir,
-               stars: surfStars(waveH, wavePer, windSpd, windDir, waveDir) };
-    });
-    days.push({
-      label:   d === 0 ? 'Today' : d === 1 ? 'Tomorrow' : date.toLocaleDateString('en-GB', { weekday: 'short' }),
-      dateStr: date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
-      slots,
-    });
+      const stars   = surfStars(waveH, wavePer, windSpd, windDir, waveDir);
+
+      // Wave range in feet (surf height → face height)
+      const range   = waveRangeFt(mh, baseIdx, d, slot.hour, slot.spread);
+      const rangeStr= range ? `${range.lo}-${range.hi}` : '—';
+
+      // Wind in mph
+      const windMph = windSpd != null ? Math.round(windSpd * 0.621) : null;
+      const wc      = windClass(windSpd, windDir, waveDir);
+      const badge   = wc === 'wind-off' ? 'badge-off' : wc === 'wind-cross' ? 'badge-cross' : 'badge-on';
+
+      // Swell in feet
+      const swellFt = swellH != null ? Math.round(swellH * 3.281) : null;
+      const swellPerDisp = swellPer ?? wavePer;
+
+      // Highlight the current time slot on today
+      const isNow = d === 0 && nowHour >= slot.hour - slot.spread &&
+                    nowHour < slot.hour + slot.spread;
+
+      html += `<div class="msw-row${isNow ? ' is-now' : ''}">
+        <div class="msw-time">${slot.label}</div>
+        <div class="msw-surf">
+          <div class="wave-range ${waveClass(waveH)}">${rangeStr}<span class="ft">ft</span></div>
+          <div class="slot-stars stars ${starsClass(stars)}">${renderStars(stars)}</div>
+        </div>
+        <div class="msw-swell">
+          <div class="swell-ht">${swellFt != null ? swellFt : '—'}<small>ft</small>
+            &nbsp;<span style="color:var(--muted);font-size:.8rem">${fmt(swellPerDisp,0)}s</span>
+          </div>
+          <div class="swell-meta">${dirArrow(waveDir)} <span class="swell-deg">${waveDir != null ? Math.round(waveDir)+'°' : ''}</span></div>
+        </div>
+        <div class="msw-wind">
+          <div class="wind-mph">${windMph ?? '—'}<small>mph</small></div>
+          <div class="wind-badge ${badge}">${dirName(windDir) || '—'}</div>
+        </div>
+      </div>`;
+    }
+
+    html += '</div>';
   }
 
-  const S = SLOTS.length;
-  let t = '<table class="msw-table" cellspacing="0">';
+  document.getElementById('mswForecast').innerHTML = html;
+}
 
-  // Day headers
-  t += '<tr class="tr-days"><th class="th-label"></th>';
-  days.forEach(day => {
-    t += `<th class="th-day" colspan="${S}"><div class="dh-name">${day.label}</div><div class="dh-date">${day.dateStr}</div></th>`;
-  });
-  t += '</tr>';
-
-  // Slot sub-headers
-  t += '<tr class="tr-slots"><th class="th-label"></th>';
-  days.forEach(day => {
-    day.slots.forEach((s, i) => {
-      t += `<th class="th-slot${i === 0 ? ' ds' : ''}">${s.label}</th>`;
-    });
-  });
-  t += '</tr>';
-
-  // Rating row
-  t += '<tr class="tr-data"><td class="td-label">Rating</td>';
-  days.forEach(day => {
-    day.slots.forEach((s, i) => {
-      const rc = s.stars >= 4 ? ` r${s.stars}` : '';
-      t += `<td class="td-slot td-rating${i===0?' ds':''}${rc}"><span class="stars ${starsClass(s.stars)}">${renderStars(s.stars)}</span></td>`;
-    });
-  });
-  t += '</tr>';
-
-  // Wave height row
-  t += '<tr class="tr-data tr-alt"><td class="td-label">Waves</td>';
-  days.forEach(day => {
-    day.slots.forEach((s, i) => {
-      t += `<td class="td-slot td-wave${i===0?' ds':''}"><span class="${waveClass(s.waveH)}">${fmt(s.waveH,1)}<small>m</small></span></td>`;
-    });
-  });
-  t += '</tr>';
-
-  // Period row
-  t += '<tr class="tr-data"><td class="td-label">Period</td>';
-  days.forEach(day => {
-    day.slots.forEach((s, i) => {
-      t += `<td class="td-slot${i===0?' ds':''}">${fmt(s.wavePer,0)}<small>s</small></td>`;
-    });
-  });
-  t += '</tr>';
-
-  // Wind row
-  t += '<tr class="tr-data tr-alt"><td class="td-label">Wind</td>';
-  days.forEach(day => {
-    day.slots.forEach((s, i) => {
-      const wc = windClass(s.windSpd, s.windDir, s.waveDir);
-      t += `<td class="td-slot td-wind${i===0?' ds':''}">
-        <span class="wind-arrow ${wc}">${dirArrow(s.windDir)}</span>
-        <span class="${wc}">${fmt(s.windSpd,0)}</span>
-      </td>`;
-    });
-  });
-  t += '</tr>';
-
-  // Swell direction row
-  t += '<tr class="tr-data"><td class="td-label">Swell</td>';
-  days.forEach(day => {
-    day.slots.forEach((s, i) => {
-      t += `<td class="td-slot${i===0?' ds':''}">${dirArrow(s.waveDir)} <small>${dirName(s.waveDir)}</small></td>`;
-    });
-  });
-  t += '</tr>';
-
-  t += '</table>';
-  document.getElementById('forecastGrid').innerHTML = t;
+// Wave height as a feet range: lo = Hs in ft, hi = face height (~1.75× Hs)
+function waveRangeFt(mh, baseIdx, dayOff, centerHour, spread) {
+  const vals = [];
+  for (let h = Math.max(0, centerHour - spread); h <= Math.min(23, centerHour + spread); h++) {
+    const v = safeVal(mh.wave_height, baseIdx + dayOff * 24 + h);
+    if (v != null) vals.push(v);
+  }
+  if (!vals.length) return null;
+  const mid = vals[Math.floor(vals.length / 2)];
+  const lo  = Math.max(1, Math.round(mid * 3.281));
+  const hi  = Math.max(lo + 1, Math.round(mid * 3.281 * 1.75));
+  return { lo, hi };
 }
 
 // ── Tide section ──────────────────────────────────────────────────────────────
