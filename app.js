@@ -663,12 +663,11 @@ function surfStars(waveH, wavePer, windSpd, windDir, swellDir, spotFacing = null
   if (!waveH || waveH < 0.3) return 0;
   let score = 0;
 
-  // Wave height (0–6)
-  if      (waveH >= 3.0) score += 6;
-  else if (waveH >= 2.0) score += 5;
-  else if (waveH >= 1.5) score += 4;
-  else if (waveH >= 1.0) score += 3;
-  else if (waveH >= 0.6) score += 1;
+  // Wave height (0–5)
+  if      (waveH >= 3.0) score += 5;
+  else if (waveH >= 2.0) score += 4;
+  else if (waveH >= 1.5) score += 3;
+  else if (waveH >= 1.0) score += 2;
 
   // Swell period (0–4)
   if      (wavePer >= 15) score += 4;
@@ -695,10 +694,10 @@ function surfStars(waveH, wavePer, windSpd, windDir, swellDir, spotFacing = null
     else if (diff >  90) score -= 1;
   }
 
-  if (score >= 13) return 5;
-  if (score >= 10) return 4;
-  if (score >= 7)  return 3;
-  if (score >= 4)  return 2;
+  if (score >= 11) return 5;
+  if (score >= 8)  return 4;
+  if (score >= 5)  return 3;
+  if (score >= 2)  return 2;
   return 1;
 }
 
