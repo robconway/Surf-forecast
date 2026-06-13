@@ -177,9 +177,16 @@ locateBtn.addEventListener('click', () => {
 
 async function reverseGeocode(lat, lon) {
   try {
-    const res  = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=&latitude=${lat}&longitude=${lon}&count=1&language=en&format=json`);
+    // Nominatim supports true reverse geocoding (Open-Meteo geocoding API does not)
+    const res  = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=10`,
+      { headers: { 'Accept-Language': 'en' } }
+    );
     const data = await res.json();
-    if (data.results?.[0]) return data.results[0].name;
+    const a    = data.address || {};
+    const place = a.village || a.town || a.city || a.suburb || a.county || a.state;
+    const country = a.country_code?.toUpperCase();
+    if (place) return country ? `${place}, ${country}` : place;
   } catch (_) {}
   return `${lat.toFixed(3)}, ${lon.toFixed(3)}`;
 }
@@ -203,34 +210,63 @@ function nearestSpots(lat, lon, n = 3) {
 
 // ── Webcams (Windy API) ───────────────────────────────────────────────────────
 async function fetchWebcams(lat, lon) {
-  // Try Windy API v3 first, fall back to v2
-  const v3url = `https://api.windy.com/webcams/api/v3/webcams?nearby=${lat},${lon},100&limit=10&include=images,urls,location&apiKey=${WINDY_KEY}`;
-  const v2url = `https://api.windy.com/api/webcams/v2/list/nearby/${lat},${lon},100?show=webcams:image,location,url&key=${WINDY_KEY}`;
-
-  let data;
-  const r3 = await fetch(v3url);
-  if (r3.ok) {
-    data = await r3.json();
-    // v3 response: { webcams: [...] }
-    return (data.webcams || [])
-      .filter(w => w.status === 'active')
-      .map(w => ({
-        id:    w.webcamId,
-        title: w.title,
-        status: w.status,
-        dist:  haversine(lat, lon, w.location?.latitude, w.location?.longitude),
-        image: { current: { preview: w.images?.current?.preview, thumbnail: w.images?.current?.thumbnail } },
-        url:   { current: { desktop: w.urls?.detail } },
-        location: w.location,
-      }));
+  // Windy Webcams API — try v3 then v2, normalise to common shape
+  const endpoints = [
+    { url: `https://api.windy.com/webcams/api/v3/webcams?nearby=${lat},${lon},100&limit=10&include=images,urls,location&apiKey=${WINDY_KEY}`, ver: 3 },
+    { url: `https://api.windy.com/api/webcams/v2/list/nearby/${lat},${lon},100?show=webcams:image,location,url&key=${WINDY_KEY}`, ver: 2 },
+  ];
+  for (const ep of endpoints) {
+    try {
+      const res = await fetch(ep.url);
+      if (!res.ok) continue;
+      const data = await res.json();
+      const list = ep.ver === 3 ? (data.webcams || []) : (data.result?.webcams || []);
+      if (!list.length) continue;
+      return list
+        .filter(w => w.status === 'active')
+        .map(w => {
+          const isV3 = ep.ver === 3;
+          const locLat = isV3 ? w.location?.latitude  : w.location?.latitude;
+          const locLon = isV3 ? w.location?.longitude : w.location?.longitude;
+          return {
+            title: w.title,
+            dist:  haversine(lat, lon, locLat, locLon),
+            thumb: isV3 ? (w.images?.current?.preview || w.images?.current?.thumbnail)
+                        : (w.image?.current?.preview  || w.image?.current?.thumbnail),
+            link:  isV3 ? (w.urls?.detail || `https://www.windy.com/webcams/${w.webcamId}`)
+                        : (w.url?.current?.desktop || `https://www.windy.com/webcams/${w.id}`),
+          };
+        });
+    } catch (_) { continue; }
   }
-  // v2 fallback
-  const r2 = await fetch(v2url);
-  if (!r2.ok) throw new Error('Windy API error');
-  const d2 = await r2.json();
-  return (d2.result?.webcams || [])
-    .filter(w => w.status === 'active')
-    .map(w => ({ ...w, dist: haversine(lat, lon, w.location?.latitude, w.location?.longitude) }));
+  return [];
+}
+
+function renderWebcams(lat, lon) {
+  const section = document.getElementById('webcamSection');
+  const row     = document.getElementById('webcamRow');
+  row.innerHTML = '<span class="wc-loading">Loading cameras…</span>';
+  section.classList.remove('hidden');
+
+  fetchWebcams(lat, lon)
+    .then(cams => {
+      if (!cams.length) { section.classList.add('hidden'); return; }
+      const sorted = cams.sort((a, b) => a.dist - b.dist).slice(0, 6);
+      row.innerHTML = '';
+      sorted.forEach(c => {
+        const card = document.createElement('a');
+        card.className = 'webcam-card';
+        card.href      = c.link;
+        card.target    = '_blank';
+        card.rel       = 'noopener noreferrer';
+        card.innerHTML = `
+          ${c.thumb ? `<img src="${c.thumb}" alt="${c.title}" loading="lazy"/>` : '<div class="wc-no-img">📷</div>'}
+          <div class="wc-name">${c.title}</div>
+          <div class="wc-dist">${Math.round(c.dist)}km away</div>`;
+        row.appendChild(card);
+      });
+    })
+    .catch(() => section.classList.add('hidden'));
 }
 
 function renderWebcams(lat, lon) {
@@ -265,18 +301,23 @@ function renderWebcams(lat, lon) {
 // ── Nearest surf spots (OSM) ──────────────────────────────────────────────────
 // Query OpenStreetMap via Overpass API for real surf spots nearby
 async function fetchOSMSpots(lat, lon) {
-  // Exclude surf schools/shops/clubs — but allow amenity=beach etc.
-  const filters = `["sport"="surfing"]["amenity"!="surf_school"]["amenity"!="school"][!"shop"]["leisure"!="sports_centre"]`;
-  const q = `[out:json][timeout:10];(`+
-    `node${filters}(around:300000,${lat},${lon});`+
-    `way${filters}(around:300000,${lat},${lon});`+
+  // Broad query — filter commercially in JS rather than risk excluding real breaks
+  const q = `[out:json][timeout:15];(`+
+    `node["sport"="surfing"](around:150000,${lat},${lon});`+
+    `way["sport"="surfing"](around:150000,${lat},${lon});`+
     `);out center;`;
   const res = await fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(q)}`);
   if (!res.ok) throw new Error('Overpass error');
   const data = await res.json();
-  const COMMERCIAL = /school|shop|hire|lesson|academy|coaching|tuition|club|centre|center|ltd|co\.|llc/i;
+  const COMMERCIAL = /\b(school|surf school|hire|lesson|academy|coaching|tuition|ltd|llc|plc)\b/i;
   return data.elements
-    .filter(el => el.tags?.name && !COMMERCIAL.test(el.tags.name))
+    .filter(el => {
+      if (!el.tags?.name) return false;
+      if (el.tags.amenity === 'surf_school') return false;
+      if (el.tags.shop) return false;
+      if (COMMERCIAL.test(el.tags.name)) return false;
+      return true;
+    })
     .map(el => ({
       name: el.tags.name,
       lat:  el.lat  ?? el.center?.lat,
@@ -477,7 +518,7 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
           <div class="swell-ht">${swellFt != null ? swellFt : '—'}<small>ft</small>
             &nbsp;<span style="color:var(--muted);font-size:.8rem">${fmt(swellPerDisp,0)}s</span>
           </div>
-          <div class="swell-meta">${dirArrow(waveDir)} <span class="swell-deg">${waveDir != null ? Math.round(waveDir)+'°' : ''}</span></div>
+          <div class="swell-meta">${dirArrow(waveDir)} ${dirName(waveDir)}<span class="swell-deg">${waveDir != null ? ' '+Math.round(waveDir)+'°' : ''}</span></div>
         </div>
         <div class="msw-wind">
           <div class="wind-mph">${windKph ?? '—'}<small>km/h</small></div>
