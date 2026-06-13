@@ -1,6 +1,7 @@
 'use strict';
 
-const WINDY_KEY = 'nLTvWT2UmcDdp3GkdRiQWDFUdRR5wY19';
+const WINDY_KEY          = 'nLTvWT2UmcDdp3GkdRiQWDFUdRR5wY19';
+const WINDY_FORECAST_KEY = 'Co5nExKymgGLAt8hFZNQWsB1geyjLrhZ';
 
 // ── Time slots (MSW style: rows) ──────────────────────────────────────────────
 const SLOTS = [
@@ -372,21 +373,75 @@ function paintSpotButtons(spots, lat, lon) {
 }
 
 // ── API ───────────────────────────────────────────────────────────────────────
+let currentLat = null, currentLon = null, currentName = null;
+let currentModel = 'openmeteo';
+
 async function loadForecast(lat, lon, name) {
+  currentLat = lat; currentLon = lon; currentName = name;
+  await reloadForecast();
+}
+
+async function reloadForecast() {
+  const lat = currentLat, lon = currentLon, name = currentName;
   showLoading();
   try {
-    const marineVars = 'wave_height,wave_period,wave_direction,swell_wave_height,swell_wave_period,swell_wave_direction';
-    const [mRes, wRes] = await Promise.all([
-      fetch(`https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}&hourly=${marineVars}&timezone=auto&forecast_days=7`),
-      fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=windspeed_10m,winddirection_10m&timezone=auto&forecast_days=7`),
-    ]);
-    if (!mRes.ok) throw new Error('Marine API error — this location may be inland or unsupported.');
-    if (!wRes.ok) throw new Error('Weather API error.');
-    const [marine, weather] = await Promise.all([mRes.json(), wRes.json()]);
+    let marine, weather;
+    if (currentModel === 'openmeteo') {
+      const vars = 'wave_height,wave_period,wave_direction,swell_wave_height,swell_wave_period';
+      const [mRes, wRes] = await Promise.all([
+        fetch(`https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}&hourly=${vars}&timezone=auto&forecast_days=7`),
+        fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=windspeed_10m,winddirection_10m&timezone=auto&forecast_days=7`),
+      ]);
+      if (!mRes.ok) throw new Error('Marine API error — this location may be inland or unsupported.');
+      if (!wRes.ok) throw new Error('Weather API error.');
+      [marine, weather] = await Promise.all([mRes.json(), wRes.json()]);
+    } else {
+      ({ marine, weather } = await fetchWindyForecast(lat, lon, currentModel));
+    }
     renderAll(lat, lon, name, marine, weather);
   } catch (err) {
     showError(`Failed to load forecast: ${err.message}`);
   }
+}
+
+async function fetchWindyForecast(lat, lon, model) {
+  const res = await fetch('https://api.windy.com/api/point-forecast/v2', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      lat, lon, model,
+      parameters: ['waves', 'swell1', 'swell2', 'windU', 'windV'],
+      levels: ['surface'],
+      key: WINDY_FORECAST_KEY,
+    }),
+  });
+  if (!res.ok) throw new Error(`Windy ${model.toUpperCase()} unavailable for this location.`);
+  const d = await res.json();
+  if (d.error) throw new Error(`Windy: ${d.error}`);
+
+  const times = (d.ts || []).map(ts => new Date(ts).toISOString().slice(0, 16));
+  const u     = d['windU-surface'] || [];
+  const v     = d['windV-surface'] || [];
+
+  return {
+    marine: {
+      hourly: {
+        time:              times,
+        wave_height:       d['waves-significant_height_combined'] || [],
+        wave_period:       d['waves-period']                      || [],
+        wave_direction:    d['waves-direction']                   || [],
+        swell_wave_height: d['swell1-significant_height']         || [],
+        swell_wave_period: d['swell1-period']                     || [],
+      },
+    },
+    weather: {
+      hourly: {
+        time:               times,
+        windspeed_10m:      u.map((ui, i) => Math.sqrt(ui*ui + (v[i]||0)*(v[i]||0)) * 3.6),
+        winddirection_10m:  u.map((ui, i) => (Math.atan2(ui, v[i]||0) * 180/Math.PI + 180) % 360),
+      },
+    },
+  };
 }
 
 // ── Master render ─────────────────────────────────────────────────────────────
@@ -781,7 +836,18 @@ function showLoading() {
 function showApp() {
   [loadingEl, errorEl, splash].forEach(el => el.classList.add('hidden'));
   appEl.classList.remove('hidden');
+  document.getElementById('modelTabs').classList.remove('hidden');
 }
+
+// Model tab switching
+document.getElementById('modelTabs').addEventListener('click', e => {
+  const btn = e.target.closest('.model-tab');
+  if (!btn || btn.classList.contains('active') || !currentLat) return;
+  document.querySelectorAll('.model-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentModel = btn.dataset.model;
+  reloadForecast();
+});
 function showError(msg) {
   [loadingEl, appEl].forEach(el => el.classList.add('hidden'));
   errorEl.textContent = msg;
