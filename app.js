@@ -476,6 +476,10 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
   }
   if (nearestDist > 5) spotFacing = null;
 
+  const existingRatings = {};
+  loadFeedback().forEach(e => { existingRatings[`${e.date}|${e.slot}`] = e.actual; });
+  const isoToday = now.toISOString().slice(0, 10);
+
   let html = '';
 
   for (let d = 0; d < 7; d++) {
@@ -504,7 +508,8 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
       const swellPer= safeVal(mh.swell_wave_period, idx);
       const windSpd = safeVal(wh.windspeed_10m, idx);
       const windDir = safeVal(wh.winddirection_10m, idx);
-      const stars   = surfStars(waveH, wavePer, windSpd, windDir, waveDir, spotFacing);
+      const score   = surfScore(waveH, wavePer, windSpd, windDir, waveDir, spotFacing);
+      const stars   = score === 0 ? 0 : scoreToStars(score);
 
       // Wave range in feet (surf height → face height)
       const range   = waveRangeFt(mh, baseIdx, d, slot.hour, slot.spread);
@@ -519,10 +524,11 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
       const swellPerDisp = swellPer ?? wavePer;
 
       // Highlight the current time slot on today
-      const isNow = d === 0 && nowHour >= slot.hour - slot.spread &&
-                    nowHour < slot.hour + slot.spread;
+      const isNow  = d === 0 && nowHour >= slot.hour - slot.spread &&
+                     nowHour < slot.hour + slot.spread;
+      const isPast = d === 0 && nowHour >= slot.hour + slot.spread;
 
-      html += `<div class="msw-row${isNow ? ' is-now' : ''}">
+      html += `<div class="msw-row${isNow ? ' is-now' : ''}${isPast ? ' is-past' : ''}">
         <div class="msw-time">${slot.label}</div>
         <div class="msw-surf">
           <div class="wave-range ${waveClass(waveH)}">${rangeStr}<span class="ft">ft</span></div>
@@ -539,6 +545,31 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
           <div class="wind-badge ${badge}">${dirName(windDir) || '—'}</div>
         </div>
       </div>`;
+
+      if (isPast) {
+        const fbKey    = `${isoToday}|${slot.label}`;
+        const offshore = windDir != null && waveDir != null &&
+          angleDiff(windDir, (waveDir + 180) % 360) < 50;
+        const sdiff    = spotFacing != null && waveDir != null
+          ? angleDiff(waveDir, spotFacing) : '';
+        const existing = existingRatings[fbKey];
+        html += existing
+          ? `<div class="slot-feedback">
+               <span class="fb-label">Rated</span>
+               <span class="fb-rated">${'★'.repeat(existing)}${'☆'.repeat(5 - existing)}</span>
+             </div>`
+          : `<div class="slot-feedback"
+                 data-date="${isoToday}" data-slot="${slot.label}"
+                 data-predicted="${stars}"
+                 data-lat="${lat}" data-lon="${lon}"
+                 data-wh="${waveH?.toFixed(2) ?? ''}" data-per="${wavePer ?? ''}"
+                 data-wsp="${windSpd ?? ''}" data-off="${offshore}" data-sdiff="${sdiff}">
+               <span class="fb-label">How was it?</span>
+               <span class="fb-stars">
+                 ${[1,2,3,4,5].map(v => `<button class="fb-star" data-v="${v}">★</button>`).join('')}
+               </span>
+             </div>`;
+      }
     }
 
     // Tide strip at the bottom of each day
@@ -659,23 +690,20 @@ function fmtH(h) {
 }
 
 // ── Surf star rating (0–5) ────────────────────────────────────────────────────
-function surfStars(waveH, wavePer, windSpd, windDir, swellDir, spotFacing = null) {
+function surfScore(waveH, wavePer, windSpd, windDir, swellDir, spotFacing = null) {
   if (!waveH || waveH < 0.3) return 0;
   let score = 0;
 
-  // Wave height (0–5)
   if      (waveH >= 3.0) score += 5;
   else if (waveH >= 2.0) score += 4;
   else if (waveH >= 1.5) score += 3;
   else if (waveH >= 1.0) score += 2;
 
-  // Swell period (0–4)
   if      (wavePer >= 15) score += 4;
   else if (wavePer >= 12) score += 3;
   else if (wavePer >= 9)  score += 2;
   else if (wavePer >= 6)  score += 1;
 
-  // Wind (0–4): reduced by 1 vs previous
   const offshore = windDir != null && swellDir != null &&
     angleDiff(windDir, (swellDir + 180) % 360) < 50;
   if (windSpd != null) {
@@ -683,10 +711,8 @@ function surfStars(waveH, wavePer, windSpd, windDir, swellDir, spotFacing = null
     else if (windSpd < 15 && offshore) score += 3;
     else if (windSpd < 10)             score += 2;
     else if (windSpd < 20)             score += 1;
-    // strong onshore: 0
   }
 
-  // Swell direction vs break facing (-1 to +2, named spots only)
   if (spotFacing != null && swellDir != null) {
     const diff = angleDiff(swellDir, spotFacing);
     if      (diff <= 30) score += 2;
@@ -694,11 +720,22 @@ function surfStars(waveH, wavePer, windSpd, windDir, swellDir, spotFacing = null
     else if (diff >  90) score -= 1;
   }
 
-  if (score >= 11) return 5;
-  if (score >= 8)  return 4;
-  if (score >= 5)  return 3;
-  if (score >= 2)  return 2;
+  return score;
+}
+
+function scoreToStars(score) {
+  // Bias shifts thresholds based on personal feedback (clamped to ±2 stars)
+  const adj = Math.max(-2, Math.min(2, getStarBias())) * 3;
+  if (score >= 11 - adj) return 5;
+  if (score >= 8  - adj) return 4;
+  if (score >= 5  - adj) return 3;
+  if (score >= 2  - adj) return 2;
   return 1;
+}
+
+function surfStars(waveH, wavePer, windSpd, windDir, swellDir, spotFacing = null) {
+  const score = surfScore(waveH, wavePer, windSpd, windDir, swellDir, spotFacing);
+  return score === 0 ? 0 : scoreToStars(score);
 }
 
 function angleDiff(a, b) {
@@ -756,3 +793,68 @@ function showError(msg) {
   errorEl.classList.remove('hidden');
   splash.classList.remove('hidden');
 }
+
+// ── Personal feedback & calibration ──────────────────────────────────────────
+const FB_KEY = 'mlw_fb';
+
+function loadFeedback() {
+  try { return JSON.parse(localStorage.getItem(FB_KEY) || '[]'); } catch { return []; }
+}
+
+function saveFeedback(arr) {
+  localStorage.setItem(FB_KEY, JSON.stringify(arr.slice(-500)));
+}
+
+function getStarBias() {
+  return parseFloat(localStorage.getItem('mlw_bias') || '0');
+}
+
+function recordFeedback(entry) {
+  const all = loadFeedback().filter(e =>
+    !(e.date === entry.date && e.slot === entry.slot &&
+      e.lat  === entry.lat  && e.lon  === entry.lon));
+  all.push(entry);
+  saveFeedback(all);
+  // bias = mean(actual - predicted); applied in scoreToStars
+  const bias = all.reduce((s, e) => s + (e.actual - e.predicted), 0) / all.length;
+  localStorage.setItem('mlw_bias', bias.toFixed(3));
+}
+
+// Event delegation: hover preview + click to rate
+document.getElementById('mswForecast').addEventListener('mouseover', e => {
+  const star = e.target.closest('.fb-star');
+  if (!star) return;
+  const v = parseInt(star.dataset.v, 10);
+  star.closest('.fb-stars').querySelectorAll('.fb-star')
+    .forEach(s => s.classList.toggle('hovered', parseInt(s.dataset.v, 10) <= v));
+});
+
+document.getElementById('mswForecast').addEventListener('mouseout', e => {
+  const starsEl = e.target.closest('.fb-stars');
+  if (starsEl && !starsEl.contains(e.relatedTarget)) {
+    starsEl.querySelectorAll('.fb-star').forEach(s => s.classList.remove('hovered'));
+  }
+});
+
+document.getElementById('mswForecast').addEventListener('click', e => {
+  const star = e.target.closest('.fb-star');
+  if (!star) return;
+  const fb     = star.closest('.slot-feedback');
+  const actual = parseInt(star.dataset.v, 10);
+  recordFeedback({
+    date:     fb.dataset.date,
+    slot:     fb.dataset.slot,
+    lat:      parseFloat(fb.dataset.lat),
+    lon:      parseFloat(fb.dataset.lon),
+    predicted: parseInt(fb.dataset.predicted, 10),
+    actual,
+    waveH:    parseFloat(fb.dataset.wh)   || null,
+    period:   parseFloat(fb.dataset.per)  || null,
+    windSpd:  parseFloat(fb.dataset.wsp)  || null,
+    offshore: fb.dataset.off === 'true',
+    swellAngleDiff: fb.dataset.sdiff ? parseFloat(fb.dataset.sdiff) : null,
+  });
+  fb.innerHTML = `<span class="fb-label">Rated</span>
+    <span class="fb-rated">${'★'.repeat(actual)}${'☆'.repeat(5 - actual)}</span>
+    <span class="fb-count">${loadFeedback().length} session${loadFeedback().length === 1 ? '' : 's'} rated</span>`;
+});
