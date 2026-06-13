@@ -252,8 +252,7 @@ function renderAll(lat, lon, name, marine, weather) {
 
   renderNearbySpots(lat, lon);
   renderNowBanner(mh, wh, safeNow);
-  renderForecastGrid(mh, wh, baseIdx);
-  renderTides(lat, lon);
+  renderForecastGrid(mh, wh, baseIdx, lat, lon);
   showApp();
 
 }
@@ -305,9 +304,11 @@ function renderNowBanner(mh, wh, idx) {
 }
 
 // ── MSW-style forecast: days as sections, time slots as rows ─────────────────
-function renderForecastGrid(mh, wh, baseIdx) {
+function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
   const now     = new Date();
   const nowHour = now.getHours() + now.getMinutes() / 60;
+  const phaseH  = ((lon + 180) / 360) * 12.42;
+  const amp     = 1.5 + 0.5 * Math.abs(Math.cos(lat * Math.PI / 180));
   let   html    = '';
 
   for (let d = 0; d < 7; d++) {
@@ -374,6 +375,19 @@ function renderForecastGrid(mh, wh, baseIdx) {
       </div>`;
     }
 
+    // Tide strip at the bottom of each day
+    const events = tideEvents(phaseH, amp, d);
+    html += `<div class="day-tide-strip">
+      ${tideSVG(phaseH, amp, d, d === 0 ? now : null, 340, 44)}
+      <div class="day-tide-events">
+        ${events.map(e => `
+          <span class="dte ${e.type === 'H' ? 'dte-hw' : 'dte-lw'}">
+            ${e.type === 'H' ? '▲' : '▼'} ${e.time}
+            <span class="dte-ht">${e.height}m</span>
+          </span>`).join('')}
+      </div>
+    </div>`;
+
     html += '</div>';
   }
 
@@ -394,35 +408,6 @@ function waveRangeFt(mh, baseIdx, dayOff, centerHour, spread) {
   return { lo, hi };
 }
 
-// ── Tide section ──────────────────────────────────────────────────────────────
-// Semidiurnal (M2) tide estimate — illustrative only, not navigational.
-function renderTides(lat, lon) {
-  const tideRow = document.getElementById('tideRow');
-  const phaseH  = ((lon + 180) / 360) * 12.42;
-  const amp     = 1.5 + 0.5 * Math.abs(Math.cos(lat * Math.PI / 180));
-  const now     = new Date();
-
-  tideRow.innerHTML = '';
-  for (let d = 0; d < 7; d++) {
-    const date = new Date(now);
-    date.setDate(date.getDate() + d);
-    const dayLabel = d === 0 ? 'Today'
-                   : d === 1 ? 'Tomorrow'
-                   : date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
-    const events = tideEvents(phaseH, amp, d);
-    const card   = document.createElement('div');
-    card.className = 'tide-card';
-    card.innerHTML = `<div class="tc-day">${dayLabel}</div>
-      ${tideSVG(phaseH, amp, d, d === 0 ? now : null)}
-      ${events.map(e => `
-        <div class="tide-event">
-          <span class="${e.type === 'H' ? 't-type-hw' : 't-type-lw'}">${e.type === 'H' ? '▲ HW' : '▼ LW'}</span>
-          <span class="t-time">${e.time}</span>
-          <span class="t-ht">${e.height}m</span>
-        </div>`).join('')}`;
-    tideRow.appendChild(card);
-  }
-}
 
 function tideEvents(phaseH, amp, dayOff) {
   const T = 12.4167;
@@ -441,9 +426,9 @@ function tideEvents(phaseH, amp, dayOff) {
   return events.sort((a, b) => a.hour - b.hour).map(e => ({ ...e, time: fmtH(e.hour) }));
 }
 
-// nowDate is passed only for today's card so we can draw the "current" dot
-function tideSVG(phaseH, amp, dayOff, nowDate) {
-  const W = 94, H = 34, P = 3, T = 12.4167;
+// nowDate is passed only for today so we can draw the "current" white dot
+function tideSVG(phaseH, amp, dayOff, nowDate, W = 94, H = 34) {
+  const P = 3, T = 12.4167;
   const pts = [];
   for (let i = 0; i <= 48; i++) {
     const hr = (i / 48) * 24;
