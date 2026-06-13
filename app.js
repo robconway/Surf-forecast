@@ -297,20 +297,13 @@ function renderWebcams(lat, lon, locationName) {
         row.appendChild(card);
       });
     } else {
-      // YouTube fallback — always gives the user something
-      const place   = (locationName || '').split(',')[0].trim();
-      const ytQuery = encodeURIComponent(`${place} surf cam live`);
-      const windyQ  = encodeURIComponent(`${place} surf`);
+      const place = (locationName || '').split(',')[0].trim();
+      const q     = encodeURIComponent(`${place} surf cam`);
       row.innerHTML = `
-        <a class="webcam-card yt-card" href="https://www.youtube.com/results?search_query=${ytQuery}" target="_blank" rel="noopener noreferrer">
-          <div class="wc-no-img">▶</div>
-          <div class="wc-name">YouTube surf cams</div>
-          <div class="wc-dist">"${place}" live</div>
-        </a>
-        <a class="webcam-card yt-card" href="https://www.windy.com/webcams?lat=${lat}&lon=${lon}&zoom=10" target="_blank" rel="noopener noreferrer">
-          <div class="wc-no-img">🌊</div>
-          <div class="wc-name">Windy webcams</div>
-          <div class="wc-dist">Browse map</div>
+        <a class="webcam-card yt-card" href="https://www.google.com/search?q=${q}" target="_blank" rel="noopener noreferrer">
+          <div class="wc-no-img">🔍</div>
+          <div class="wc-name">Search surf cams</div>
+          <div class="wc-dist">${place}</div>
         </a>`;
     }
   });
