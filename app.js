@@ -359,13 +359,49 @@ function mergeAndPaint(lat, lon, osmSpots) {
   paintSpotButtons(picks, lat, lon);
 }
 
-function paintSpotButtons(spots, lat, lon) {
+// ── Favourite spots ───────────────────────────────────────────────────────────
+const FAVS_KEY = 'mlw_favs';
+
+function loadFavs() {
+  try { return JSON.parse(localStorage.getItem(FAVS_KEY) || '[]'); } catch { return []; }
+}
+
+function isFav(spot) {
+  return loadFavs().some(f => haversine(f.lat, f.lon, spot.lat, spot.lon) < 0.3);
+}
+
+function toggleFav(spot, nearbySpots, lat, lon) {
+  const favs = loadFavs();
+  const idx  = favs.findIndex(f => haversine(f.lat, f.lon, spot.lat, spot.lon) < 0.3);
+  if (idx >= 0) favs.splice(idx, 1);
+  else favs.push({ name: spot.name, lat: spot.lat, lon: spot.lon });
+  localStorage.setItem(FAVS_KEY, JSON.stringify(favs));
+  paintSpotButtons(nearbySpots, lat, lon);
+}
+
+function paintSpotButtons(nearbySpots, lat, lon) {
+  const favs = loadFavs().map(f => ({ ...f, dist: haversine(lat, lon, f.lat, f.lon) }));
+
+  // Favs first, then nearby (skip anything already in favs by proximity)
+  const combined = [...favs];
+  for (const s of nearbySpots) {
+    if (!combined.some(e => haversine(s.lat, s.lon, e.lat, e.lon) < 0.3)) {
+      combined.push({ ...s, dist: s.dist ?? haversine(lat, lon, s.lat, s.lon) });
+    }
+  }
+
   nearbySpotsEl.innerHTML = '<span class="nearby-label">Nearby spots:</span>';
-  spots.forEach(s => {
-    const dist = s.dist ?? haversine(lat, lon, s.lat, s.lon);
-    const btn  = document.createElement('button');
-    btn.className = 'spot-btn';
-    btn.innerHTML = `${s.name} <span class="spot-dist">${Math.round(dist)}km</span>`;
+  combined.forEach(s => {
+    const starred = isFav(s);
+    const btn = document.createElement('button');
+    btn.className = `spot-btn${starred ? ' is-fav' : ''}`;
+    btn.innerHTML = `<span class="spot-star">${starred ? '★' : '☆'}</span>${s.name} <span class="spot-dist">${Math.round(s.dist)}km</span>`;
+
+    btn.querySelector('.spot-star').addEventListener('click', e => {
+      e.stopPropagation();
+      toggleFav(s, nearbySpots, lat, lon);
+    });
+
     btn.addEventListener('click', () => loadForecast(s.lat, s.lon, s.name));
     nearbySpotsEl.appendChild(btn);
   });
