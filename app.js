@@ -411,6 +411,7 @@ async function fetchWindyForecast(lat, lon, model) {
     body: JSON.stringify({
       lat, lon, model,
       parameters: ['waves', 'swell1', 'windU', 'windV'],
+      levels: ['surface'],
       key: WINDY_FORECAST_KEY,
     }),
   });
