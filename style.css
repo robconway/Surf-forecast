@@ -10,11 +10,11 @@
 
   /* Star colours */
   --s0: #374151;
-  --s1: #4a9eca;
-  --s2: #2878c8;
-  --s3: #1d4ed8;
-  --s4: #7c3aed;
-  --s5: #a855f7;
+  --s1: #ef4444;
+  --s2: #f97316;
+  --s3: #eab308;
+  --s4: #84cc16;
+  --s5: #22c55e;
 
   /* Wave height colours */
   --wh-flat:   #374151;
@@ -183,11 +183,11 @@ main { flex: 1; padding: 1.25rem 1.25rem 2.5rem; max-width: 820px; margin: 0 aut
 .nearby-loading { font-size: .8rem; color: var(--muted); margin-left: .4rem; }
 
 /* ── Webcam section ─────────────────────────────────────────────────────────── */
-.webcam-section { margin-bottom: 1.25rem; }
+.webcam-section { margin-bottom: .5rem; }
 .section-label {
-  font-size: .7rem; text-transform: uppercase;
+  font-size: .65rem; text-transform: uppercase;
   letter-spacing: .1em; color: var(--muted);
-  margin-bottom: .6rem; padding-bottom: .4rem;
+  margin-bottom: .4rem; padding-bottom: .3rem;
   border-bottom: 1px solid var(--border);
 }
 .webcam-row {
@@ -218,6 +218,13 @@ main { flex: 1; padding: 1.25rem 1.25rem 2.5rem; max-width: 820px; margin: 0 aut
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .wc-dist { font-size: .68rem; color: var(--muted); padding: 0 .5rem .45rem; }
+/* Search fallback — plain inline link, no card chrome */
+.wc-search-link {
+  font-size: .72rem; color: var(--muted);
+  text-decoration: none; display: inline-flex;
+  align-items: center; gap: .3rem; padding: .3rem 0;
+}
+.wc-search-link:hover { color: var(--accent); }
 .wc-loading { font-size: .8rem; color: var(--muted); }
 
 /* ── Now banner ─────────────────────────────────────────────────────────────── */
@@ -245,7 +252,7 @@ main { flex: 1; padding: 1.25rem 1.25rem 2.5rem; max-width: 820px; margin: 0 aut
 .stars-2 { color: var(--s2); }
 .stars-3 { color: var(--s3); }
 .stars-4 { color: var(--s4); }
-.stars-5 { color: var(--s5); filter: drop-shadow(0 0 6px #a855f7); }
+.stars-5 { color: var(--s5); filter: drop-shadow(0 0 6px #22c55e); }
 
 /* ── Wave height colours ────────────────────────────────────────────────────── */
 .wh-flat   { color: var(--wh-flat); }

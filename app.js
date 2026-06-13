@@ -299,12 +299,7 @@ function renderWebcams(lat, lon, locationName) {
     } else {
       const place = (locationName || '').split(',')[0].trim();
       const q     = encodeURIComponent(`${place} surf cam`);
-      row.innerHTML = `
-        <a class="webcam-card yt-card" href="https://www.google.com/search?q=${q}" target="_blank" rel="noopener noreferrer">
-          <div class="wc-no-img">🔍</div>
-          <div class="wc-name">Search surf cams</div>
-          <div class="wc-dist">${place}</div>
-        </a>`;
+      row.innerHTML = `<a class="wc-search-link" href="https://www.google.com/search?q=${q}" target="_blank" rel="noopener noreferrer">🔍 Search surf cams for ${place}</a>`;
     }
   });
 }
