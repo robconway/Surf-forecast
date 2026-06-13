@@ -14,87 +14,87 @@ const SLOTS = [
 // ── Global surf spots database ────────────────────────────────────────────────
 const SURF_SPOTS = [
   // UK & Ireland
-  { name: 'Fistral Beach',     lat: 50.4145, lon: -5.1044 },
-  { name: 'Watergate Bay',     lat: 50.4467, lon: -5.0558 },
-  { name: 'Polzeath',          lat: 50.5742, lon: -4.8728 },
-  { name: 'Perranporth',       lat: 50.3467, lon: -5.1503 },
-  { name: 'Sennen Cove',       lat: 50.0703, lon: -5.6986 },
-  { name: 'Bude',              lat: 50.8272, lon: -4.5436 },
-  { name: 'Croyde',            lat: 51.1236, lon: -4.2282 },
-  { name: 'Saunton Sands',     lat: 51.1000, lon: -4.2100 },
-  { name: 'Putsborough',       lat: 51.1406, lon: -4.2469 },
-  { name: 'Saltburn',          lat: 54.5844, lon: -0.9728 },
-  { name: 'Thurso East',       lat: 58.5936, lon: -3.5239 },
-  { name: 'Tiree',             lat: 56.5000, lon: -6.9167 },
-  { name: 'Portrush',          lat: 55.2044, lon: -6.6612 },
-  { name: 'Bundoran',          lat: 54.4776, lon: -8.2782 },
-  { name: 'Rossnowlagh',       lat: 54.6417, lon: -8.2083 },
-  { name: 'Easkey',            lat: 54.2942, lon: -8.9611 },
-  { name: 'Lahinch',           lat: 52.9335, lon: -9.3438 },
-  { name: 'Inch Beach',        lat: 52.1417, lon: -9.9417 },
+  { name: 'Fistral Beach',     lat: 50.4145, lon: -5.1044, facing: 315 },
+  { name: 'Watergate Bay',     lat: 50.4467, lon: -5.0558, facing: 315 },
+  { name: 'Polzeath',          lat: 50.5742, lon: -4.8728, facing: 315 },
+  { name: 'Perranporth',       lat: 50.3467, lon: -5.1503, facing: 270 },
+  { name: 'Sennen Cove',       lat: 50.0703, lon: -5.6986, facing: 260 },
+  { name: 'Bude',              lat: 50.8272, lon: -4.5436, facing: 270 },
+  { name: 'Croyde',            lat: 51.1236, lon: -4.2282, facing: 315 },
+  { name: 'Saunton Sands',     lat: 51.1000, lon: -4.2100, facing: 300 },
+  { name: 'Putsborough',       lat: 51.1406, lon: -4.2469, facing: 290 },
+  { name: 'Saltburn',          lat: 54.5844, lon: -0.9728, facing:  30 },
+  { name: 'Thurso East',       lat: 58.5936, lon: -3.5239, facing:  10 },
+  { name: 'Tiree',             lat: 56.5000, lon: -6.9167, facing: 270 },
+  { name: 'Portrush',          lat: 55.2044, lon: -6.6612, facing: 350 },
+  { name: 'Bundoran',          lat: 54.4776, lon: -8.2782, facing: 315 },
+  { name: 'Rossnowlagh',       lat: 54.6417, lon: -8.2083, facing: 305 },
+  { name: 'Easkey',            lat: 54.2942, lon: -8.9611, facing: 315 },
+  { name: 'Lahinch',           lat: 52.9335, lon: -9.3438, facing: 260 },
+  { name: 'Inch Beach',        lat: 52.1417, lon: -9.9417, facing: 225 },
   // France & Spain
-  { name: 'Hossegor',          lat: 43.6528, lon: -1.4456 },
-  { name: 'Biarritz',          lat: 43.4832, lon: -1.5586 },
-  { name: 'Mundaka',           lat: 43.4067, lon: -2.6844 },
-  { name: 'Zarautz',           lat: 43.2856, lon: -2.1714 },
-  { name: 'Zurriola',          lat: 43.3266, lon: -1.9728 },
-  { name: 'Pantín',            lat: 43.6167, lon: -7.8500 },
-  { name: 'Rodiles',           lat: 43.5342, lon: -5.4697 },
+  { name: 'Hossegor',          lat: 43.6528, lon: -1.4456, facing: 270 },
+  { name: 'Biarritz',          lat: 43.4832, lon: -1.5586, facing: 315 },
+  { name: 'Mundaka',           lat: 43.4067, lon: -2.6844, facing: 350 },
+  { name: 'Zarautz',           lat: 43.2856, lon: -2.1714, facing: 355 },
+  { name: 'Zurriola',          lat: 43.3266, lon: -1.9728, facing: 350 },
+  { name: 'Pantín',            lat: 43.6167, lon: -7.8500, facing: 315 },
+  { name: 'Rodiles',           lat: 43.5342, lon: -5.4697, facing: 350 },
   // Portugal
-  { name: 'Nazaré',            lat: 39.6000, lon: -9.0667 },
-  { name: 'Peniche',           lat: 39.3556, lon: -9.3814 },
-  { name: 'Ericeira',          lat: 38.9667, lon: -9.4167 },
-  { name: 'Sagres',            lat: 37.0133, lon: -8.9378 },
+  { name: 'Nazaré',            lat: 39.6000, lon: -9.0667, facing: 270 },
+  { name: 'Peniche',           lat: 39.3556, lon: -9.3814, facing: 270 },
+  { name: 'Ericeira',          lat: 38.9667, lon: -9.4167, facing: 270 },
+  { name: 'Sagres',            lat: 37.0133, lon: -8.9378, facing: 200 },
   // Morocco & Canaries
-  { name: 'Taghazout',         lat: 30.5442, lon: -9.7089 },
-  { name: 'Anchor Point',      lat: 30.5592, lon: -9.7169 },
-  { name: 'El Médano',         lat: 28.0461, lon: -16.5358 },
-  { name: 'Las Palmas',        lat: 28.1272, lon: -15.4194 },
+  { name: 'Taghazout',         lat: 30.5442, lon: -9.7089, facing: 315 },
+  { name: 'Anchor Point',      lat: 30.5592, lon: -9.7169, facing: 315 },
+  { name: 'El Médano',         lat: 28.0461, lon: -16.5358, facing: 180 },
+  { name: 'Las Palmas',        lat: 28.1272, lon: -15.4194, facing: 315 },
   // Hawaii
-  { name: 'Pipeline',          lat: 21.6645, lon: -158.0530 },
-  { name: 'Sunset Beach',      lat: 21.6789, lon: -158.0400 },
-  { name: 'Waimea Bay',        lat: 21.6433, lon: -158.0644 },
-  { name: 'Jaws (Peahi)',      lat: 20.9378, lon: -156.3906 },
+  { name: 'Pipeline',          lat: 21.6645, lon: -158.0530, facing:   0 },
+  { name: 'Sunset Beach',      lat: 21.6789, lon: -158.0400, facing:  10 },
+  { name: 'Waimea Bay',        lat: 21.6433, lon: -158.0644, facing: 355 },
+  { name: 'Jaws (Peahi)',      lat: 20.9378, lon: -156.3906, facing:  10 },
   // USA
-  { name: 'Mavericks',         lat: 37.4939, lon: -122.5011 },
-  { name: 'Steamer Lane',      lat: 36.9521, lon: -122.0231 },
-  { name: 'Rincon',            lat: 34.3726, lon: -119.4784 },
-  { name: 'Trestles',          lat: 33.3833, lon: -117.5833 },
-  { name: 'Huntington Beach',  lat: 33.6595, lon: -118.0057 },
-  { name: 'The Wedge',         lat: 33.5933, lon: -117.8844 },
+  { name: 'Mavericks',         lat: 37.4939, lon: -122.5011, facing: 315 },
+  { name: 'Steamer Lane',      lat: 36.9521, lon: -122.0231, facing: 270 },
+  { name: 'Rincon',            lat: 34.3726, lon: -119.4784, facing: 220 },
+  { name: 'Trestles',          lat: 33.3833, lon: -117.5833, facing: 220 },
+  { name: 'Huntington Beach',  lat: 33.6595, lon: -118.0057, facing: 225 },
+  { name: 'The Wedge',         lat: 33.5933, lon: -117.8844, facing: 180 },
   // Mexico & Central America
-  { name: 'Puerto Escondido',  lat: 15.8656, lon: -97.0703 },
-  { name: 'Sayulita',          lat: 20.8681, lon: -105.4347 },
-  { name: 'Tamarindo',         lat: 10.2997, lon: -85.8369 },
-  { name: 'Pavones',           lat:  8.4411, lon: -83.1594 },
+  { name: 'Puerto Escondido',  lat: 15.8656, lon: -97.0703, facing: 175 },
+  { name: 'Sayulita',          lat: 20.8681, lon: -105.4347, facing: 270 },
+  { name: 'Tamarindo',         lat: 10.2997, lon: -85.8369, facing: 275 },
+  { name: 'Pavones',           lat:  8.4411, lon: -83.1594, facing: 210 },
   // Pacific & Polynesia
-  { name: "Teahupo'o",         lat: -17.8672, lon: -149.2622 },
-  { name: 'Cloudbreak',        lat: -17.9781, lon:  177.2139 },
+  { name: "Teahupo'o",         lat: -17.8672, lon: -149.2622, facing: 210 },
+  { name: 'Cloudbreak',        lat: -17.9781, lon:  177.2139, facing: 260 },
   // Indonesia & Asia
-  { name: 'Uluwatu',           lat:  -8.8294, lon:  115.0849 },
-  { name: 'Padang Padang',     lat:  -8.8108, lon:  115.0917 },
-  { name: 'Kuta Beach',        lat:  -8.7189, lon:  115.1686 },
-  { name: 'Desert Point',      lat:  -8.7872, lon:  115.9247 },
-  { name: 'G-Land',            lat:  -8.6667, lon:  114.4333 },
-  { name: 'Cloud 9, Siargao',  lat:   9.8498, lon:  126.0458 },
-  { name: 'Arugam Bay',        lat:   6.8419, lon:   81.8361 },
+  { name: 'Uluwatu',           lat:  -8.8294, lon:  115.0849, facing: 220 },
+  { name: 'Padang Padang',     lat:  -8.8108, lon:  115.0917, facing: 225 },
+  { name: 'Kuta Beach',        lat:  -8.7189, lon:  115.1686, facing: 260 },
+  { name: 'Desert Point',      lat:  -8.7872, lon:  115.9247, facing: 315 },
+  { name: 'G-Land',            lat:  -8.6667, lon:  114.4333, facing: 185 },
+  { name: 'Cloud 9, Siargao',  lat:   9.8498, lon:  126.0458, facing:  80 },
+  { name: 'Arugam Bay',        lat:   6.8419, lon:   81.8361, facing:  90 },
   // Australia
-  { name: 'Snapper Rocks',     lat: -28.1753, lon:  153.5558 },
-  { name: 'Kirra',             lat: -28.1694, lon:  153.5586 },
-  { name: 'Lennox Head',       lat: -28.7942, lon:  153.5928 },
-  { name: 'Manly Beach',       lat: -33.7969, lon:  151.2855 },
-  { name: 'Bondi Beach',       lat: -33.8908, lon:  151.2743 },
-  { name: 'Bells Beach',       lat: -38.3667, lon:  144.2833 },
-  { name: 'Margaret River',    lat: -33.9539, lon:  114.7519 },
+  { name: 'Snapper Rocks',     lat: -28.1753, lon:  153.5558, facing:  80 },
+  { name: 'Kirra',             lat: -28.1694, lon:  153.5586, facing:  90 },
+  { name: 'Lennox Head',       lat: -28.7942, lon:  153.5928, facing:  80 },
+  { name: 'Manly Beach',       lat: -33.7969, lon:  151.2855, facing:  90 },
+  { name: 'Bondi Beach',       lat: -33.8908, lon:  151.2743, facing:  90 },
+  { name: 'Bells Beach',       lat: -38.3667, lon:  144.2833, facing: 210 },
+  { name: 'Margaret River',    lat: -33.9539, lon:  114.7519, facing: 210 },
   // South Africa
-  { name: "Jeffreys Bay",      lat: -34.0500, lon:   24.9167 },
-  { name: 'Big Bay',           lat: -33.7325, lon:   18.4756 },
-  { name: 'Durban',            lat: -29.8587, lon:   31.0218 },
+  { name: "Jeffreys Bay",      lat: -34.0500, lon:   24.9167, facing: 235 },
+  { name: 'Big Bay',           lat: -33.7325, lon:   18.4756, facing: 300 },
+  { name: 'Durban',            lat: -29.8587, lon:   31.0218, facing:  80 },
   // South America
-  { name: 'Punta Rocas',       lat: -12.4739, lon:  -76.8278 },
-  { name: 'Lobitos',           lat:  -4.4525, lon:  -81.2731 },
-  { name: 'Florianópolis',     lat: -27.5969, lon:  -48.5495 },
-  { name: 'Itacaré',           lat: -14.2774, lon:  -38.9946 },
+  { name: 'Punta Rocas',       lat: -12.4739, lon:  -76.8278, facing: 225 },
+  { name: 'Lobitos',           lat:  -4.4525, lon:  -81.2731, facing: 215 },
+  { name: 'Florianópolis',     lat: -27.5969, lon:  -48.5495, facing:  90 },
+  { name: 'Itacaré',           lat: -14.2774, lon:  -38.9946, facing:  80 },
 ];
 
 // ── Tidal reference nodes (MHWS/MHWN/MLWN/MLWS metres above Chart Datum) ─────
@@ -474,7 +474,16 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
   const nowHour = now.getHours() + now.getMinutes() / 60;
   const phaseH        = ((lon + 180) / 360) * 12.42;
   const { hwH, lwH } = tidalParams(lat, lon, now);
-  let   html          = '';
+
+  // Find nearest named spot within 5 km for swell direction scoring
+  let spotFacing = null, nearestDist = Infinity;
+  for (const s of SURF_SPOTS) {
+    const d = haversine(lat, lon, s.lat, s.lon);
+    if (d < nearestDist) { nearestDist = d; spotFacing = s.facing; }
+  }
+  if (nearestDist > 5) spotFacing = null;
+
+  let html = '';
 
   for (let d = 0; d < 7; d++) {
     const date = new Date(now);
@@ -502,7 +511,7 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
       const swellPer= safeVal(mh.swell_wave_period, idx);
       const windSpd = safeVal(wh.windspeed_10m, idx);
       const windDir = safeVal(wh.winddirection_10m, idx);
-      const stars   = surfStars(waveH, wavePer, windSpd, windDir, waveDir);
+      const stars   = surfStars(waveH, wavePer, windSpd, windDir, waveDir, spotFacing);
 
       // Wave range in feet (surf height → face height)
       const range   = waveRangeFt(mh, baseIdx, d, slot.hour, slot.spread);
@@ -657,29 +666,40 @@ function fmtH(h) {
 }
 
 // ── Surf star rating (0–5) ────────────────────────────────────────────────────
-function surfStars(waveH, wavePer, windSpd, windDir, swellDir) {
+function surfStars(waveH, wavePer, windSpd, windDir, swellDir, spotFacing = null) {
   if (!waveH || waveH < 0.3) return 0;
   let score = 0;
 
+  // Wave height (0–6)
   if      (waveH >= 3.0) score += 6;
   else if (waveH >= 2.0) score += 5;
   else if (waveH >= 1.5) score += 4;
   else if (waveH >= 1.0) score += 3;
   else if (waveH >= 0.6) score += 1;
 
+  // Swell period (0–4)
   if      (wavePer >= 15) score += 4;
   else if (wavePer >= 12) score += 3;
   else if (wavePer >= 9)  score += 2;
   else if (wavePer >= 6)  score += 1;
 
+  // Wind (0–4): reduced by 1 vs previous
   const offshore = windDir != null && swellDir != null &&
     angleDiff(windDir, (swellDir + 180) % 360) < 50;
   if (windSpd != null) {
-    if      (windSpd < 10 && offshore) score += 5;
-    else if (windSpd < 15 && offshore) score += 4;
-    else if (windSpd < 10)             score += 3;
-    else if (windSpd < 20)             score += 2;
-    else if (windSpd < 30)             score += 1;
+    if      (windSpd < 10 && offshore) score += 4;
+    else if (windSpd < 15 && offshore) score += 3;
+    else if (windSpd < 10)             score += 2;
+    else if (windSpd < 20)             score += 1;
+    // strong onshore: 0
+  }
+
+  // Swell direction vs break facing (-1 to +2, named spots only)
+  if (spotFacing != null && swellDir != null) {
+    const diff = angleDiff(swellDir, spotFacing);
+    if      (diff <= 30) score += 2;
+    else if (diff <= 60) score += 1;
+    else if (diff >  90) score -= 1;
   }
 
   if (score >= 13) return 5;
