@@ -97,6 +97,43 @@ const SURF_SPOTS = [
   { name: 'Itacaré',           lat: -14.2774, lon:  -38.9946 },
 ];
 
+// ── Tidal reference nodes (MHWS/MHWN/MLWN/MLWS metres above Chart Datum) ─────
+// Nearest node is used, then interpolated with moon phase for springs vs neaps.
+const TIDAL_NODES = [
+  { lat: 51.21, lon:  -4.11, mhws: 8.0, mhwn: 6.0, mlwn: 2.3, mlws: 0.7 }, // Ilfracombe / N Devon
+  { lat: 51.45, lon:  -3.18, mhws: 9.5, mhwn: 7.1, mlwn: 2.5, mlws: 0.7 }, // Cardiff / Bristol Channel
+  { lat: 50.83, lon:  -4.54, mhws: 6.7, mhwn: 5.1, mlwn: 2.1, mlws: 0.8 }, // Bude
+  { lat: 50.41, lon:  -5.08, mhws: 5.7, mhwn: 4.3, mlwn: 1.8, mlws: 0.5 }, // Newquay
+  { lat: 50.35, lon:  -5.15, mhws: 5.5, mhwn: 4.1, mlwn: 1.6, mlws: 0.5 }, // Perranporth
+  { lat: 50.57, lon:  -4.87, mhws: 5.4, mhwn: 4.0, mlwn: 1.6, mlws: 0.5 }, // Polzeath
+  { lat: 50.07, lon:  -5.70, mhws: 5.3, mhwn: 3.9, mlwn: 1.5, mlws: 0.5 }, // Sennen
+  { lat: 54.58, lon:  -0.97, mhws: 5.1, mhwn: 3.9, mlwn: 1.7, mlws: 0.5 }, // Saltburn
+  { lat: 58.59, lon:  -3.52, mhws: 3.5, mhwn: 2.8, mlwn: 1.2, mlws: 0.5 }, // Thurso
+  { lat: 56.50, lon:  -6.92, mhws: 3.6, mhwn: 2.6, mlwn: 1.1, mlws: 0.4 }, // Tiree
+  { lat: 55.20, lon:  -6.66, mhws: 1.5, mhwn: 1.1, mlwn: 0.5, mlws: 0.2 }, // Portrush
+  { lat: 54.48, lon:  -8.28, mhws: 3.8, mhwn: 2.9, mlwn: 1.1, mlws: 0.3 }, // Bundoran
+  { lat: 52.93, lon:  -9.34, mhws: 4.7, mhwn: 3.5, mlwn: 1.4, mlws: 0.4 }, // Lahinch
+  { lat: 52.14, lon:  -9.94, mhws: 3.5, mhwn: 2.6, mlwn: 0.9, mlws: 0.3 }, // Inch Beach
+  { lat: 43.65, lon:  -1.45, mhws: 3.8, mhwn: 2.8, mlwn: 1.0, mlws: 0.4 }, // Hossegor
+  { lat: 43.48, lon:  -1.56, mhws: 3.8, mhwn: 2.8, mlwn: 1.0, mlws: 0.4 }, // Biarritz
+  { lat: 43.41, lon:  -2.68, mhws: 4.2, mhwn: 3.2, mlwn: 1.2, mlws: 0.5 }, // Mundaka
+  { lat: 39.60, lon:  -9.07, mhws: 3.8, mhwn: 2.8, mlwn: 1.2, mlws: 0.4 }, // Nazaré
+  { lat: 39.36, lon:  -9.38, mhws: 3.8, mhwn: 2.8, mlwn: 1.2, mlws: 0.4 }, // Peniche
+  { lat: 38.97, lon:  -9.42, mhws: 3.7, mhwn: 2.7, mlwn: 1.1, mlws: 0.4 }, // Ericeira
+  { lat: 37.01, lon:  -8.94, mhws: 3.2, mhwn: 2.4, mlwn: 0.9, mlws: 0.3 }, // Sagres
+  { lat: 30.54, lon:  -9.71, mhws: 3.0, mhwn: 2.2, mlwn: 0.8, mlws: 0.3 }, // Taghazout
+  { lat: 28.10, lon: -14.35, mhws: 1.5, mhwn: 1.1, mlwn: 0.5, mlws: 0.2 }, // Lanzarote
+  { lat: 27.90, lon: -15.58, mhws: 1.5, mhwn: 1.1, mlwn: 0.5, mlws: 0.2 }, // Gran Canaria
+  { lat: 36.95, lon:-122.05, mhws: 1.7, mhwn: 1.3, mlwn: 0.5, mlws: 0.0 }, // Santa Cruz CA
+  { lat: 34.03, lon:-118.80, mhws: 1.6, mhwn: 1.3, mlwn: 0.5, mlws: 0.0 }, // Malibu CA
+  { lat: 21.30, lon:-157.80, mhws: 0.6, mhwn: 0.4, mlwn: 0.2, mlws: 0.1 }, // Oahu HI
+  { lat: -8.70, lon: 115.20, mhws: 2.0, mhwn: 1.5, mlwn: 0.5, mlws: 0.2 }, // Bali
+  { lat:-33.90, lon:  18.40, mhws: 1.8, mhwn: 1.5, mlwn: 0.6, mlws: 0.3 }, // Cape Town
+  { lat:-33.90, lon: 151.30, mhws: 1.3, mhwn: 1.0, mlwn: 0.5, mlws: 0.2 }, // Sydney
+  { lat:-31.90, lon: 115.90, mhws: 0.7, mhwn: 0.5, mlwn: 0.2, mlws: 0.1 }, // Perth
+  { lat:  0,    lon:   0,    mhws: 1.5, mhwn: 1.1, mlwn: 0.5, mlws: 0.2 }, // open-ocean fallback
+];
+
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const locationInput  = document.getElementById('locationInput');
 const searchBtn      = document.getElementById('searchBtn');
@@ -435,9 +472,9 @@ function renderNowBanner(mh, wh, idx) {
 function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
   const now     = new Date();
   const nowHour = now.getHours() + now.getMinutes() / 60;
-  const phaseH  = ((lon + 180) / 360) * 12.42;
-  const amp     = 1.5 + 0.5 * Math.abs(Math.cos(lat * Math.PI / 180));
-  let   html    = '';
+  const phaseH        = ((lon + 180) / 360) * 12.42;
+  const { hwH, lwH } = tidalParams(lat, lon, now);
+  let   html          = '';
 
   for (let d = 0; d < 7; d++) {
     const date = new Date(now);
@@ -503,9 +540,9 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
     }
 
     // Tide strip at the bottom of each day
-    const events = tideEvents(phaseH, amp, d);
+    const events = tideEvents(phaseH, hwH, lwH, d);
     html += `<div class="day-tide-strip">
-      ${tideSVG(phaseH, amp, d, d === 0 ? now : null, 340, 44)}
+      ${tideSVG(phaseH, hwH, lwH, d, d === 0 ? now : null, 340, 44)}
       <div class="day-tide-events">
         ${events.map(e => `
           <span class="dte ${e.type === 'H' ? 'dte-hw' : 'dte-lw'}">
@@ -536,38 +573,65 @@ function waveRangeFt(mh, baseIdx, dayOff, centerHour, spread) {
 }
 
 
-function tideEvents(phaseH, amp, dayOff) {
+// ── Moon-phase helpers ────────────────────────────────────────────────────────
+function moonAge(date) {
+  const ref = new Date('2000-01-06T18:14:00Z');
+  const synodic = 29.53058868;
+  return (((date - ref) / 86400000) % synodic + synodic) % synodic;
+}
+
+function springNeapFactor(date) {
+  // 1 at new/full moon (springs), 0 at quarter moons (neaps)
+  const angle = (moonAge(date) / 29.53058868) * 4 * Math.PI;
+  return (1 + Math.cos(angle)) / 2;
+}
+
+function tidalParams(lat, lon, date) {
+  let best = TIDAL_NODES[TIDAL_NODES.length - 1], bestDist = Infinity;
+  for (const n of TIDAL_NODES) {
+    const d = haversine(lat, lon, n.lat, n.lon);
+    if (d < bestDist) { bestDist = d; best = n; }
+  }
+  const f   = springNeapFactor(date);
+  const hwH = best.mhwn + (best.mhws - best.mhwn) * f;
+  const lwH = best.mlwn - (best.mlwn - best.mlws) * f;
+  return { hwH, lwH, amp: (hwH - lwH) / 2 };
+}
+
+function tideEvents(phaseH, hwH, lwH, dayOff) {
   const T = 12.4167;
   const events = [];
   for (let k = -2; k <= 5; k++) {
     const hwAbs = phaseH + k * T;
     const hwRel = hwAbs - dayOff * 24;
     if (hwRel >= 0 && hwRel < 24) {
-      events.push({ type: 'H', hour: hwRel, height: (amp * 0.92 + 0.1 * Math.sin(k * 0.8)).toFixed(1) });
+      events.push({ type: 'H', hour: hwRel, height: hwH.toFixed(1) });
     }
     const lwRel = hwRel + T / 2;
     if (lwRel >= 0 && lwRel < 24) {
-      events.push({ type: 'L', hour: lwRel, height: (amp * 0.1 + 0.05 * Math.abs(Math.cos(k))).toFixed(1) });
+      events.push({ type: 'L', hour: lwRel, height: lwH.toFixed(1) });
     }
   }
   return events.sort((a, b) => a.hour - b.hour).map(e => ({ ...e, time: fmtH(e.hour) }));
 }
 
 // nowDate is passed only for today so we can draw the "current" white dot
-function tideSVG(phaseH, amp, dayOff, nowDate, W = 94, H = 34) {
+function tideSVG(phaseH, hwH, lwH, dayOff, nowDate, W = 94, H = 34) {
   const P = 3, T = 12.4167;
+  const amp = (hwH - lwH) / 2;
+  const norm = th => (th + amp) / (2 * amp); // 0 = LW, 1 = HW
   const pts = [];
   for (let i = 0; i <= 48; i++) {
     const hr = (i / 48) * 24;
     const th = amp * Math.cos(2 * Math.PI * (hr + dayOff * 24 - phaseH) / T);
-    pts.push(`${(P + (i/48)*(W-2*P)).toFixed(1)},${(P + (1-(th+amp)/(2*amp))*(H-2*P)).toFixed(1)}`);
+    pts.push(`${(P + (i/48)*(W-2*P)).toFixed(1)},${(P + (1-norm(th))*(H-2*P)).toFixed(1)}`);
   }
   const path = 'M ' + pts.join(' L ');
 
-  const hwlwDots = tideEvents(phaseH, amp, dayOff).map(e => {
+  const hwlwDots = tideEvents(phaseH, hwH, lwH, dayOff).map(e => {
     const th = amp * Math.cos(2 * Math.PI * (e.hour + dayOff * 24 - phaseH) / T);
     const cx = (P + (e.hour/24)*(W-2*P)).toFixed(1);
-    const cy = (P + (1-(th+amp)/(2*amp))*(H-2*P)).toFixed(1);
+    const cy = (P + (1-norm(th))*(H-2*P)).toFixed(1);
     return `<circle cx="${cx}" cy="${cy}" r="2.5" fill="${e.type==='H'?'#60a5fa':'#475569'}"/>`;
   }).join('');
 
@@ -576,7 +640,7 @@ function tideSVG(phaseH, amp, dayOff, nowDate, W = 94, H = 34) {
     const hr = nowDate.getHours() + nowDate.getMinutes() / 60;
     const th = amp * Math.cos(2 * Math.PI * (hr - phaseH) / T);
     const cx = (P + (hr/24)*(W-2*P)).toFixed(1);
-    const cy = (P + (1-(th+amp)/(2*amp))*(H-2*P)).toFixed(1);
+    const cy = (P + (1-norm(th))*(H-2*P)).toFixed(1);
     nowDot = `<circle cx="${cx}" cy="${cy}" r="4" fill="white" stroke="#0b0f1c" stroke-width="1.5"/>`;
   }
 
