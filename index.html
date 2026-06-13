@@ -10,7 +10,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Magic Lie Weed" />
-  <link rel="stylesheet" href="style.css?v=24" />
+  <link rel="stylesheet" href="style.css?v=25" />
 </head>
 <body>
   <header>
@@ -21,7 +21,15 @@
         <ul id="suggestions"></ul>
       </div>
       <button id="searchBtn">Search</button>
-      <button id="locateBtn" title="Use my location">📍</button>
+      <button id="locateBtn" title="Use my location">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+          <circle cx="12" cy="12" r="4"/>
+          <line x1="12" y1="2" x2="12" y2="7"/>
+          <line x1="12" y1="17" x2="12" y2="22"/>
+          <line x1="2" y1="12" x2="7" y2="12"/>
+          <line x1="17" y1="12" x2="22" y2="12"/>
+        </svg>
+      </button>
     </div>
   </header>
 
@@ -71,6 +79,6 @@
     Data: <a href="https://open-meteo.com" target="_blank">Open-Meteo</a> Marine &amp; Weather APIs · Free &amp; open source
   </footer>
 
-  <script src="app.js?v=24"></script>
+  <script src="app.js?v=25"></script>
 </body>
 </html>
