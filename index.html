@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Surf Forecast</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <div class="logo">🏄 SurfCast</div>
+    <div class="search-bar">
+      <input type="text" id="locationInput" placeholder="Search surf spot or city..." autocomplete="off" />
+      <button id="searchBtn">Search</button>
+      <button id="locateBtn" title="Use my location">📍</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="splash" class="splash">
+      <h1>Find Your Next Wave</h1>
+      <p>Search for any surf spot or use your current location to get a 7-day forecast.</p>
+    </div>
+
+    <div id="app" class="hidden">
+      <section class="location-header">
+        <h2 id="locationName">—</h2>
+        <p id="locationCoords" class="coords"></p>
+      </section>
+
+      <section class="conditions-now">
+        <h3>Current Conditions</h3>
+        <div class="conditions-grid" id="currentConditions"></div>
+      </section>
+
+      <section class="forecast-section">
+        <h3>7-Day Forecast</h3>
+        <div class="forecast-scroll">
+          <table class="forecast-table" id="forecastTable">
+            <thead>
+              <tr>
+                <th>Day</th>
+                <th>Rating</th>
+                <th>Wave Height</th>
+                <th>Wave Period</th>
+                <th>Swell Dir</th>
+                <th>Wind</th>
+                <th>Wind Dir</th>
+              </tr>
+            </thead>
+            <tbody id="forecastBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="tide-section">
+        <h3>Tides — Next 7 Days</h3>
+        <div id="tideGrid" class="tide-grid"></div>
+      </section>
+    </div>
+
+    <div id="error" class="error hidden"></div>
+    <div id="loading" class="loading hidden">
+      <div class="spinner"></div>
+      <p>Loading forecast…</p>
+    </div>
+  </main>
+
+  <footer>
+    <p>Data: <a href="https://open-meteo.com" target="_blank">Open-Meteo</a> Marine &amp; Geocoding APIs · Free &amp; Open Source</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
