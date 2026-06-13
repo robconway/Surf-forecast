@@ -199,6 +199,35 @@ main { flex: 1; padding: 1.25rem 1.25rem 2.5rem; max-width: 1140px; margin: 0 au
 .loc-bar h2 { font-size: 1.55rem; font-weight: 700; }
 #locationCoords { font-size: .78rem; color: var(--muted); }
 
+/* ── Nearby spots ───────────────────────────────────────────────────────────── */
+.nearby-spots {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+.nearby-label {
+  font-size: .7rem;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.spot-btn {
+  padding: .3rem .85rem;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: .8rem;
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+  white-space: nowrap;
+}
+.spot-btn:hover { background: var(--bg2); border-color: var(--accent); }
+.spot-dist { font-size: .68rem; color: var(--muted); margin-left: .25rem; }
+
 /* ── Now banner ─────────────────────────────────────────────────────────────── */
 .now-banner {
   display: flex;

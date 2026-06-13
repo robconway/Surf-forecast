@@ -1,24 +1,110 @@
 'use strict';
 
-// Time slots shown in the forecast grid
+// ── Time slots shown in the forecast grid ─────────────────────────────────────
 const SLOTS = [
   { label: 'AM',   hour: 9  },
   { label: 'PM',   hour: 14 },
   { label: 'EVE',  hour: 18 },
 ];
 
-// ── DOM refs ─────────────────────────────────────────────────────────────────
-const locationInput = document.getElementById('locationInput');
-const searchBtn     = document.getElementById('searchBtn');
-const locateBtn     = document.getElementById('locateBtn');
-const splash        = document.getElementById('splash');
-const appEl         = document.getElementById('app');
-const errorEl       = document.getElementById('error');
-const loadingEl     = document.getElementById('loading');
-const locationName  = document.getElementById('locationName');
-const locationCoords= document.getElementById('locationCoords');
-const nowBanner     = document.getElementById('nowBanner');
-const suggestionsEl = document.getElementById('suggestions');
+// ── Global surf spots database ────────────────────────────────────────────────
+const SURF_SPOTS = [
+  // UK & Ireland
+  { name: 'Fistral Beach',     lat: 50.4145, lon: -5.1044 },
+  { name: 'Watergate Bay',     lat: 50.4467, lon: -5.0558 },
+  { name: 'Polzeath',          lat: 50.5742, lon: -4.8728 },
+  { name: 'Perranporth',       lat: 50.3467, lon: -5.1503 },
+  { name: 'Sennen Cove',       lat: 50.0703, lon: -5.6986 },
+  { name: 'Bude',              lat: 50.8272, lon: -4.5436 },
+  { name: 'Croyde',            lat: 51.1236, lon: -4.2282 },
+  { name: 'Saunton Sands',     lat: 51.1197, lon: -4.2322 },
+  { name: 'Saltburn',          lat: 54.5844, lon: -0.9728 },
+  { name: 'Thurso East',       lat: 58.5936, lon: -3.5239 },
+  { name: 'Tiree',             lat: 56.5000, lon: -6.9167 },
+  { name: 'Portrush',          lat: 55.2044, lon: -6.6612 },
+  { name: 'Bundoran',          lat: 54.4776, lon: -8.2782 },
+  { name: 'Rossnowlagh',       lat: 54.6417, lon: -8.2083 },
+  { name: 'Easkey',            lat: 54.2942, lon: -8.9611 },
+  { name: 'Lahinch',           lat: 52.9335, lon: -9.3438 },
+  { name: 'Inch Beach',        lat: 52.1417, lon: -9.9417 },
+  // France & Spain
+  { name: 'Hossegor',          lat: 43.6528, lon: -1.4456 },
+  { name: 'Biarritz',          lat: 43.4832, lon: -1.5586 },
+  { name: 'Mundaka',           lat: 43.4067, lon: -2.6844 },
+  { name: 'Zarautz',           lat: 43.2856, lon: -2.1714 },
+  { name: 'Zurriola',          lat: 43.3266, lon: -1.9728 },
+  { name: 'Pantín',            lat: 43.6167, lon: -7.8500 },
+  { name: 'Rodiles',           lat: 43.5342, lon: -5.4697 },
+  // Portugal
+  { name: 'Nazaré',            lat: 39.6000, lon: -9.0667 },
+  { name: 'Peniche',           lat: 39.3556, lon: -9.3814 },
+  { name: 'Ericeira',          lat: 38.9667, lon: -9.4167 },
+  { name: 'Sagres',            lat: 37.0133, lon: -8.9378 },
+  // Morocco & Canaries
+  { name: 'Taghazout',         lat: 30.5442, lon: -9.7089 },
+  { name: 'Anchor Point',      lat: 30.5592, lon: -9.7169 },
+  { name: 'El Médano',         lat: 28.0461, lon: -16.5358 },
+  { name: 'Las Palmas',        lat: 28.1272, lon: -15.4194 },
+  // Hawaii
+  { name: 'Pipeline',          lat: 21.6645, lon: -158.0530 },
+  { name: 'Sunset Beach',      lat: 21.6789, lon: -158.0400 },
+  { name: 'Waimea Bay',        lat: 21.6433, lon: -158.0644 },
+  { name: 'Jaws (Peahi)',      lat: 20.9378, lon: -156.3906 },
+  // USA
+  { name: 'Mavericks',         lat: 37.4939, lon: -122.5011 },
+  { name: 'Steamer Lane',      lat: 36.9521, lon: -122.0231 },
+  { name: 'Rincon',            lat: 34.3726, lon: -119.4784 },
+  { name: 'Trestles',          lat: 33.3833, lon: -117.5833 },
+  { name: 'Huntington Beach',  lat: 33.6595, lon: -118.0057 },
+  { name: 'The Wedge',         lat: 33.5933, lon: -117.8844 },
+  // Mexico & Central America
+  { name: 'Puerto Escondido',  lat: 15.8656, lon: -97.0703 },
+  { name: 'Sayulita',          lat: 20.8681, lon: -105.4347 },
+  { name: 'Tamarindo',         lat: 10.2997, lon: -85.8369 },
+  { name: 'Pavones',           lat:  8.4411, lon: -83.1594 },
+  // Pacific & Polynesia
+  { name: "Teahupo'o",         lat: -17.8672, lon: -149.2622 },
+  { name: 'Cloudbreak',        lat: -17.9781, lon:  177.2139 },
+  // Indonesia & Asia
+  { name: 'Uluwatu',           lat:  -8.8294, lon:  115.0849 },
+  { name: 'Padang Padang',     lat:  -8.8108, lon:  115.0917 },
+  { name: 'Kuta Beach',        lat:  -8.7189, lon:  115.1686 },
+  { name: 'Desert Point',      lat:  -8.7872, lon:  115.9247 },
+  { name: 'G-Land',            lat:  -8.6667, lon:  114.4333 },
+  { name: 'Cloud 9, Siargao',  lat:   9.8498, lon:  126.0458 },
+  { name: 'Arugam Bay',        lat:   6.8419, lon:   81.8361 },
+  // Australia
+  { name: 'Snapper Rocks',     lat: -28.1753, lon:  153.5558 },
+  { name: 'Kirra',             lat: -28.1694, lon:  153.5586 },
+  { name: 'Lennox Head',       lat: -28.7942, lon:  153.5928 },
+  { name: 'Manly Beach',       lat: -33.7969, lon:  151.2855 },
+  { name: 'Bondi Beach',       lat: -33.8908, lon:  151.2743 },
+  { name: 'Bells Beach',       lat: -38.3667, lon:  144.2833 },
+  { name: 'Margaret River',    lat: -33.9539, lon:  114.7519 },
+  // South Africa
+  { name: "Jeffreys Bay",      lat: -34.0500, lon:   24.9167 },
+  { name: 'Big Bay',           lat: -33.7325, lon:   18.4756 },
+  { name: 'Durban',            lat: -29.8587, lon:   31.0218 },
+  // South America
+  { name: 'Punta Rocas',       lat: -12.4739, lon:  -76.8278 },
+  { name: 'Lobitos',           lat:  -4.4525, lon:  -81.2731 },
+  { name: 'Florianópolis',     lat: -27.5969, lon:  -48.5495 },
+  { name: 'Itacaré',           lat: -14.2774, lon:  -38.9946 },
+];
+
+// ── DOM refs ──────────────────────────────────────────────────────────────────
+const locationInput  = document.getElementById('locationInput');
+const searchBtn      = document.getElementById('searchBtn');
+const locateBtn      = document.getElementById('locateBtn');
+const splash         = document.getElementById('splash');
+const appEl          = document.getElementById('app');
+const errorEl        = document.getElementById('error');
+const loadingEl      = document.getElementById('loading');
+const locationName   = document.getElementById('locationName');
+const locationCoords = document.getElementById('locationCoords');
+const nowBanner      = document.getElementById('nowBanner');
+const nearbySpotsEl  = document.getElementById('nearbySpots');
+const suggestionsEl  = document.getElementById('suggestions');
 
 // ── Autocomplete ──────────────────────────────────────────────────────────────
 let debounceTimer;
@@ -94,6 +180,41 @@ async function reverseGeocode(lat, lon) {
   return `${lat.toFixed(3)}, ${lon.toFixed(3)}`;
 }
 
+// ── Nearest surf spots ────────────────────────────────────────────────────────
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 +
+            Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function nearestSpots(lat, lon, n = 3) {
+  return SURF_SPOTS
+    .map(s => ({ ...s, dist: haversine(lat, lon, s.lat, s.lon) }))
+    .sort((a, b) => a.dist - b.dist)
+    .slice(0, n);
+}
+
+function renderNearbySpots(lat, lon) {
+  nearbySpotsEl.innerHTML = '';
+  const label = document.createElement('span');
+  label.className = 'nearby-label';
+  label.textContent = 'Nearby spots:';
+  nearbySpotsEl.appendChild(label);
+
+  nearestSpots(lat, lon).forEach(s => {
+    const btn = document.createElement('button');
+    btn.className = 'spot-btn';
+    btn.innerHTML = `${s.name} <span class="spot-dist">${Math.round(s.dist)}km</span>`;
+    btn.addEventListener('click', () => loadForecast(s.lat, s.lon, s.name));
+    nearbySpotsEl.appendChild(btn);
+  });
+
+  nearbySpotsEl.classList.remove('hidden');
+}
+
 // ── API ───────────────────────────────────────────────────────────────────────
 async function loadForecast(lat, lon, name) {
   showLoading();
@@ -117,8 +238,8 @@ function renderAll(lat, lon, name, marine, weather) {
   locationName.textContent   = name;
   locationCoords.textContent = `${lat.toFixed(4)}°, ${lon.toFixed(4)}°`;
 
-  const mh = marine.hourly;
-  const wh = weather.hourly;
+  const mh  = marine.hourly;
+  const wh  = weather.hourly;
   const now = new Date();
 
   const todayStr = now.toISOString().slice(0, 10);
@@ -127,6 +248,7 @@ function renderAll(lat, lon, name, marine, weather) {
   const nowIdx   = mh.time.findIndex(t => t.startsWith(nowHStr));
   const safeNow  = nowIdx >= 0 ? nowIdx : baseIdx + now.getHours();
 
+  renderNearbySpots(lat, lon);
   renderNowBanner(mh, wh, safeNow);
   renderForecastGrid(mh, wh, baseIdx);
   renderTides(lat, lon);
@@ -177,7 +299,7 @@ function renderNowBanner(mh, wh, idx) {
 
 // ── MSW-style forecast grid ───────────────────────────────────────────────────
 function renderForecastGrid(mh, wh, baseIdx) {
-  const now = new Date();
+  const now  = new Date();
   const days = [];
 
   for (let d = 0; d < 7; d++) {
@@ -201,17 +323,16 @@ function renderForecastGrid(mh, wh, baseIdx) {
   }
 
   const S = SLOTS.length;
-
   let t = '<table class="msw-table" cellspacing="0">';
 
-  // ── Row 1: Day headers ──
+  // Day headers
   t += '<tr class="tr-days"><th class="th-label"></th>';
   days.forEach(day => {
     t += `<th class="th-day" colspan="${S}"><div class="dh-name">${day.label}</div><div class="dh-date">${day.dateStr}</div></th>`;
   });
   t += '</tr>';
 
-  // ── Row 2: Slot sub-headers ──
+  // Slot sub-headers
   t += '<tr class="tr-slots"><th class="th-label"></th>';
   days.forEach(day => {
     day.slots.forEach((s, i) => {
@@ -220,9 +341,8 @@ function renderForecastGrid(mh, wh, baseIdx) {
   });
   t += '</tr>';
 
-  // ── Row 3: Stars ──
-  t += '<tr class="tr-data">';
-  t += '<td class="td-label">Rating</td>';
+  // Rating row
+  t += '<tr class="tr-data"><td class="td-label">Rating</td>';
   days.forEach(day => {
     day.slots.forEach((s, i) => {
       const rc = s.stars >= 4 ? ` r${s.stars}` : '';
@@ -231,9 +351,8 @@ function renderForecastGrid(mh, wh, baseIdx) {
   });
   t += '</tr>';
 
-  // ── Row 4: Wave height ──
-  t += '<tr class="tr-data tr-alt">';
-  t += '<td class="td-label">Waves</td>';
+  // Wave height row
+  t += '<tr class="tr-data tr-alt"><td class="td-label">Waves</td>';
   days.forEach(day => {
     day.slots.forEach((s, i) => {
       t += `<td class="td-slot td-wave${i===0?' ds':''}"><span class="${waveClass(s.waveH)}">${fmt(s.waveH,1)}<small>m</small></span></td>`;
@@ -241,9 +360,8 @@ function renderForecastGrid(mh, wh, baseIdx) {
   });
   t += '</tr>';
 
-  // ── Row 5: Period ──
-  t += '<tr class="tr-data">';
-  t += '<td class="td-label">Period</td>';
+  // Period row
+  t += '<tr class="tr-data"><td class="td-label">Period</td>';
   days.forEach(day => {
     day.slots.forEach((s, i) => {
       t += `<td class="td-slot${i===0?' ds':''}">${fmt(s.wavePer,0)}<small>s</small></td>`;
@@ -251,9 +369,8 @@ function renderForecastGrid(mh, wh, baseIdx) {
   });
   t += '</tr>';
 
-  // ── Row 6: Wind ──
-  t += '<tr class="tr-data tr-alt">';
-  t += '<td class="td-label">Wind</td>';
+  // Wind row
+  t += '<tr class="tr-data tr-alt"><td class="td-label">Wind</td>';
   days.forEach(day => {
     day.slots.forEach((s, i) => {
       const wc = windClass(s.windSpd, s.windDir, s.waveDir);
@@ -265,9 +382,8 @@ function renderForecastGrid(mh, wh, baseIdx) {
   });
   t += '</tr>';
 
-  // ── Row 7: Swell direction ──
-  t += '<tr class="tr-data">';
-  t += '<td class="td-label">Swell</td>';
+  // Swell direction row
+  t += '<tr class="tr-data"><td class="td-label">Swell</td>';
   days.forEach(day => {
     day.slots.forEach((s, i) => {
       t += `<td class="td-slot${i===0?' ds':''}">${dirArrow(s.waveDir)} <small>${dirName(s.waveDir)}</small></td>`;
@@ -283,10 +399,9 @@ function renderForecastGrid(mh, wh, baseIdx) {
 // Semidiurnal (M2) tide estimate — illustrative only, not navigational.
 function renderTides(lat, lon) {
   const tideRow = document.getElementById('tideRow');
-  // Phase: use longitude to roughly offset local HW time
-  const phaseH = ((lon + 180) / 360) * 12.42;
-  const amp    = 1.5 + 0.5 * Math.abs(Math.cos(lat * Math.PI / 180));
-  const now    = new Date();
+  const phaseH  = ((lon + 180) / 360) * 12.42;
+  const amp     = 1.5 + 0.5 * Math.abs(Math.cos(lat * Math.PI / 180));
+  const now     = new Date();
 
   tideRow.innerHTML = '';
   for (let d = 0; d < 7; d++) {
@@ -299,7 +414,7 @@ function renderTides(lat, lon) {
     const card   = document.createElement('div');
     card.className = 'tide-card';
     card.innerHTML = `<div class="tc-day">${dayLabel}</div>
-      ${tideSVG(phaseH, amp, d)}
+      ${tideSVG(phaseH, amp, d, d === 0 ? now : null)}
       ${events.map(e => `
         <div class="tide-event">
           <span class="${e.type === 'H' ? 't-type-hw' : 't-type-lw'}">${e.type === 'H' ? '▲ HW' : '▼ LW'}</span>
@@ -327,25 +442,37 @@ function tideEvents(phaseH, amp, dayOff) {
   return events.sort((a, b) => a.hour - b.hour).map(e => ({ ...e, time: fmtH(e.hour) }));
 }
 
-function tideSVG(phaseH, amp, dayOff) {
+// nowDate is passed only for today's card so we can draw the "current" dot
+function tideSVG(phaseH, amp, dayOff, nowDate) {
   const W = 94, H = 34, P = 3, T = 12.4167;
   const pts = [];
   for (let i = 0; i <= 48; i++) {
     const hr = (i / 48) * 24;
     const th = amp * Math.cos(2 * Math.PI * (hr + dayOff * 24 - phaseH) / T);
-    pts.push(`${(P + (i/48) * (W-2*P)).toFixed(1)},${(P + (1 - (th+amp)/(2*amp)) * (H-2*P)).toFixed(1)}`);
+    pts.push(`${(P + (i/48)*(W-2*P)).toFixed(1)},${(P + (1-(th+amp)/(2*amp))*(H-2*P)).toFixed(1)}`);
   }
   const path = 'M ' + pts.join(' L ');
-  const dots = tideEvents(phaseH, amp, dayOff).map(e => {
+
+  const hwlwDots = tideEvents(phaseH, amp, dayOff).map(e => {
     const th = amp * Math.cos(2 * Math.PI * (e.hour + dayOff * 24 - phaseH) / T);
-    const cx = (P + (e.hour/24) * (W-2*P)).toFixed(1);
-    const cy = (P + (1 - (th+amp)/(2*amp)) * (H-2*P)).toFixed(1);
+    const cx = (P + (e.hour/24)*(W-2*P)).toFixed(1);
+    const cy = (P + (1-(th+amp)/(2*amp))*(H-2*P)).toFixed(1);
     return `<circle cx="${cx}" cy="${cy}" r="2.5" fill="${e.type==='H'?'#60a5fa':'#475569'}"/>`;
   }).join('');
+
+  let nowDot = '';
+  if (nowDate) {
+    const hr = nowDate.getHours() + nowDate.getMinutes() / 60;
+    const th = amp * Math.cos(2 * Math.PI * (hr - phaseH) / T);
+    const cx = (P + (hr/24)*(W-2*P)).toFixed(1);
+    const cy = (P + (1-(th+amp)/(2*amp))*(H-2*P)).toFixed(1);
+    nowDot = `<circle cx="${cx}" cy="${cy}" r="4" fill="white" stroke="#0b0f1c" stroke-width="1.5"/>`;
+  }
+
   return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block;margin:.3rem 0 .35rem">
     <path d="${path}" fill="none" stroke="#1e3a5f" stroke-width="3"/>
     <path d="${path}" fill="none" stroke="#38bdf8" stroke-width="1.5" opacity=".75"/>
-    ${dots}
+    ${hwlwDots}${nowDot}
   </svg>`;
 }
 
@@ -359,28 +486,25 @@ function surfStars(waveH, wavePer, windSpd, windDir, swellDir) {
   if (!waveH || waveH < 0.3) return 0;
   let score = 0;
 
-  // Wave height
   if      (waveH >= 3.0) score += 6;
   else if (waveH >= 2.0) score += 5;
   else if (waveH >= 1.5) score += 4;
   else if (waveH >= 1.0) score += 3;
   else if (waveH >= 0.6) score += 1;
 
-  // Period (longer = cleaner energy)
   if      (wavePer >= 15) score += 4;
   else if (wavePer >= 12) score += 3;
   else if (wavePer >= 9)  score += 2;
   else if (wavePer >= 6)  score += 1;
 
-  // Wind (offshore + light = best)
   const offshore = windDir != null && swellDir != null &&
     angleDiff(windDir, (swellDir + 180) % 360) < 50;
   if (windSpd != null) {
-    if      (windSpd < 10 && offshore)  score += 5;
-    else if (windSpd < 15 && offshore)  score += 4;
-    else if (windSpd < 10)              score += 3;
-    else if (windSpd < 20)              score += 2;
-    else if (windSpd < 30)              score += 1;
+    if      (windSpd < 10 && offshore) score += 5;
+    else if (windSpd < 15 && offshore) score += 4;
+    else if (windSpd < 10)             score += 3;
+    else if (windSpd < 20)             score += 2;
+    else if (windSpd < 30)             score += 1;
   }
 
   if (score >= 13) return 5;
