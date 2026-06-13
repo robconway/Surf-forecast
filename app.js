@@ -203,12 +203,34 @@ function nearestSpots(lat, lon, n = 3) {
 
 // ── Webcams (Windy API) ───────────────────────────────────────────────────────
 async function fetchWebcams(lat, lon) {
-  const url = `https://api.windy.com/api/webcams/v2/list/nearby/${lat},${lon},100` +
-              `?show=webcams:image,location,url&key=${WINDY_KEY}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error('Windy API error');
-  const data = await res.json();
-  return (data.result?.webcams || []).filter(w => w.status === 'active');
+  // Try Windy API v3 first, fall back to v2
+  const v3url = `https://api.windy.com/webcams/api/v3/webcams?nearby=${lat},${lon},100&limit=10&include=images,urls,location&apiKey=${WINDY_KEY}`;
+  const v2url = `https://api.windy.com/api/webcams/v2/list/nearby/${lat},${lon},100?show=webcams:image,location,url&key=${WINDY_KEY}`;
+
+  let data;
+  const r3 = await fetch(v3url);
+  if (r3.ok) {
+    data = await r3.json();
+    // v3 response: { webcams: [...] }
+    return (data.webcams || [])
+      .filter(w => w.status === 'active')
+      .map(w => ({
+        id:    w.webcamId,
+        title: w.title,
+        status: w.status,
+        dist:  haversine(lat, lon, w.location?.latitude, w.location?.longitude),
+        image: { current: { preview: w.images?.current?.preview, thumbnail: w.images?.current?.thumbnail } },
+        url:   { current: { desktop: w.urls?.detail } },
+        location: w.location,
+      }));
+  }
+  // v2 fallback
+  const r2 = await fetch(v2url);
+  if (!r2.ok) throw new Error('Windy API error');
+  const d2 = await r2.json();
+  return (d2.result?.webcams || [])
+    .filter(w => w.status === 'active')
+    .map(w => ({ ...w, dist: haversine(lat, lon, w.location?.latitude, w.location?.longitude) }));
 }
 
 function renderWebcams(lat, lon) {
@@ -220,11 +242,7 @@ function renderWebcams(lat, lon) {
   fetchWebcams(lat, lon)
     .then(cams => {
       if (!cams.length) { section.classList.add('hidden'); return; }
-      const sorted = cams
-        .map(c => ({ ...c, dist: haversine(lat, lon, c.location.latitude, c.location.longitude) }))
-        .sort((a, b) => a.dist - b.dist)
-        .slice(0, 6);
-
+      const sorted = cams.sort((a, b) => a.dist - b.dist).slice(0, 6);
       row.innerHTML = '';
       sorted.forEach(c => {
         const thumb = c.image?.current?.preview || c.image?.current?.thumbnail;
@@ -247,8 +265,8 @@ function renderWebcams(lat, lon) {
 // ── Nearest surf spots (OSM) ──────────────────────────────────────────────────
 // Query OpenStreetMap via Overpass API for real surf spots nearby
 async function fetchOSMSpots(lat, lon) {
-  // Exclude surf schools, shops and clubs at the query level
-  const filters = `["sport"="surfing"][!"amenity"][!"shop"][!"club"]["leisure"!="sports_centre"]`;
+  // Exclude surf schools/shops/clubs — but allow amenity=beach etc.
+  const filters = `["sport"="surfing"]["amenity"!="surf_school"]["amenity"!="school"][!"shop"]["leisure"!="sports_centre"]`;
   const q = `[out:json][timeout:10];(`+
     `node${filters}(around:300000,${lat},${lon});`+
     `way${filters}(around:300000,${lat},${lon});`+
