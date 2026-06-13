@@ -209,94 +209,74 @@ function nearestSpots(lat, lon, n = 3) {
     .slice(0, n);
 }
 
-// ── Webcams (Windy API) ───────────────────────────────────────────────────────
+// ── Webcams (Windy API + YouTube fallback) ───────────────────────────────────
 async function fetchWebcams(lat, lon) {
-  // Windy Webcams API — try v3 then v2, normalise to common shape
   const endpoints = [
-    { url: `https://api.windy.com/webcams/api/v3/webcams?nearby=${lat},${lon},100&limit=10&include=images,urls,location&apiKey=${WINDY_KEY}`, ver: 3 },
-    { url: `https://api.windy.com/api/webcams/v2/list/nearby/${lat},${lon},100?show=webcams:image,location,url&key=${WINDY_KEY}`, ver: 2 },
+    // v3 — newer key format
+    `https://api.windy.com/webcams/api/v3/webcams?nearby=${lat},${lon},100&limit=10&include=images,urls,location&apiKey=${WINDY_KEY}`,
+    // v2 — older key format
+    `https://api.windy.com/api/webcams/v2/list/nearby/${lat},${lon},100?show=webcams:image,location,url&key=${WINDY_KEY}`,
   ];
-  for (const ep of endpoints) {
+  for (const url of endpoints) {
     try {
-      const res = await fetch(ep.url);
-      if (!res.ok) continue;
+      const res  = await fetch(url);
       const data = await res.json();
-      const list = ep.ver === 3 ? (data.webcams || []) : (data.result?.webcams || []);
-      if (!list.length) continue;
-      return list
-        .filter(w => w.status === 'active')
-        .map(w => {
-          const isV3 = ep.ver === 3;
-          const locLat = isV3 ? w.location?.latitude  : w.location?.latitude;
-          const locLon = isV3 ? w.location?.longitude : w.location?.longitude;
-          return {
-            title: w.title,
-            dist:  haversine(lat, lon, locLat, locLon),
-            thumb: isV3 ? (w.images?.current?.preview || w.images?.current?.thumbnail)
-                        : (w.image?.current?.preview  || w.image?.current?.thumbnail),
-            link:  isV3 ? (w.urls?.detail || `https://www.windy.com/webcams/${w.webcamId}`)
-                        : (w.url?.current?.desktop || `https://www.windy.com/webcams/${w.id}`),
-          };
-        });
+      // Handle both v3 ({ webcams: [...] }) and v2 ({ result: { webcams: [...] } })
+      const list = data.webcams || data.result?.webcams || [];
+      const active = list.filter(w => w.status === 'active');
+      if (!active.length) continue;
+      return active.map(w => ({
+        title: w.title,
+        dist:  haversine(lat, lon, w.location?.latitude ?? w.location?.lat,
+                                   w.location?.longitude ?? w.location?.lon),
+        thumb: w.images?.current?.preview || w.images?.current?.thumbnail ||
+               w.image?.current?.preview  || w.image?.current?.thumbnail,
+        link:  w.urls?.detail || w.url?.current?.desktop ||
+               `https://www.windy.com/webcams/${w.webcamId || w.id}`,
+      }));
     } catch (_) { continue; }
   }
   return [];
 }
 
-function renderWebcams(lat, lon) {
+function renderWebcams(lat, lon, locationName) {
   const section = document.getElementById('webcamSection');
   const row     = document.getElementById('webcamRow');
   row.innerHTML = '<span class="wc-loading">Loading cameras…</span>';
   section.classList.remove('hidden');
 
-  fetchWebcams(lat, lon)
-    .then(cams => {
-      if (!cams.length) { section.classList.add('hidden'); return; }
-      const sorted = cams.sort((a, b) => a.dist - b.dist).slice(0, 6);
-      row.innerHTML = '';
-      sorted.forEach(c => {
+  fetchWebcams(lat, lon).then(cams => {
+    row.innerHTML = '';
+    if (cams.length) {
+      // Show Windy thumbnail cards
+      cams.sort((a, b) => a.dist - b.dist).slice(0, 6).forEach(c => {
         const card = document.createElement('a');
         card.className = 'webcam-card';
-        card.href      = c.link;
-        card.target    = '_blank';
-        card.rel       = 'noopener noreferrer';
+        card.href = c.link; card.target = '_blank'; card.rel = 'noopener noreferrer';
         card.innerHTML = `
           ${c.thumb ? `<img src="${c.thumb}" alt="${c.title}" loading="lazy"/>` : '<div class="wc-no-img">📷</div>'}
           <div class="wc-name">${c.title}</div>
           <div class="wc-dist">${Math.round(c.dist)}km away</div>`;
         row.appendChild(card);
       });
-    })
-    .catch(() => section.classList.add('hidden'));
-}
-
-function renderWebcams(lat, lon) {
-  const section = document.getElementById('webcamSection');
-  const row     = document.getElementById('webcamRow');
-  row.innerHTML = '<span class="wc-loading">Loading cameras…</span>';
-  section.classList.remove('hidden');
-
-  fetchWebcams(lat, lon)
-    .then(cams => {
-      if (!cams.length) { section.classList.add('hidden'); return; }
-      const sorted = cams.sort((a, b) => a.dist - b.dist).slice(0, 6);
-      row.innerHTML = '';
-      sorted.forEach(c => {
-        const thumb = c.image?.current?.preview || c.image?.current?.thumbnail;
-        const link  = c.url?.current?.desktop   || `https://www.windy.com/webcams/${c.id}`;
-        const card  = document.createElement('a');
-        card.className = 'webcam-card';
-        card.href      = link;
-        card.target    = '_blank';
-        card.rel       = 'noopener noreferrer';
-        card.innerHTML = `
-          ${thumb ? `<img src="${thumb}" alt="${c.title}" loading="lazy"/>` : '<div class="wc-no-img">📷</div>'}
-          <div class="wc-name">${c.title}</div>
-          <div class="wc-dist">${Math.round(c.dist)}km away</div>`;
-        row.appendChild(card);
-      });
-    })
-    .catch(() => section.classList.add('hidden'));
+    } else {
+      // YouTube fallback — always gives the user something
+      const place   = (locationName || '').split(',')[0].trim();
+      const ytQuery = encodeURIComponent(`${place} surf cam live`);
+      const windyQ  = encodeURIComponent(`${place} surf`);
+      row.innerHTML = `
+        <a class="webcam-card yt-card" href="https://www.youtube.com/results?search_query=${ytQuery}" target="_blank" rel="noopener noreferrer">
+          <div class="wc-no-img">▶</div>
+          <div class="wc-name">YouTube surf cams</div>
+          <div class="wc-dist">"${place}" live</div>
+        </a>
+        <a class="webcam-card yt-card" href="https://www.windy.com/webcams?lat=${lat}&lon=${lon}&zoom=10" target="_blank" rel="noopener noreferrer">
+          <div class="wc-no-img">🌊</div>
+          <div class="wc-name">Windy webcams</div>
+          <div class="wc-dist">Browse map</div>
+        </a>`;
+    }
+  });
 }
 
 // ── Nearest surf spots (OSM) ──────────────────────────────────────────────────
@@ -400,7 +380,7 @@ function renderAll(lat, lon, name, marine, weather) {
   const safeNow  = nowIdx >= 0 ? nowIdx : baseIdx + now.getHours();
 
   renderNearbySpots(lat, lon);
-  renderWebcams(lat, lon);
+  renderWebcams(lat, lon, name);
   renderNowBanner(mh, wh, safeNow);
   renderForecastGrid(mh, wh, baseIdx, lat, lon);
   showApp();
