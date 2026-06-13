@@ -1,35 +1,27 @@
 'use strict';
 
-// ── DOM refs ──────────────────────────────────────────────────────────────────
-const locationInput  = document.getElementById('locationInput');
-const searchBtn      = document.getElementById('searchBtn');
-const locateBtn      = document.getElementById('locateBtn');
-const splash         = document.getElementById('splash');
-const appEl          = document.getElementById('app');
-const errorEl        = document.getElementById('error');
-const loadingEl      = document.getElementById('loading');
-const locationName   = document.getElementById('locationName');
-const locationCoords = document.getElementById('locationCoords');
-const currentConds   = document.getElementById('currentConditions');
-const forecastBody   = document.getElementById('forecastBody');
-const tideGrid       = document.getElementById('tideGrid');
+// Time slots shown in the forecast grid
+const SLOTS = [
+  { label: 'AM',   hour: 9  },
+  { label: 'PM',   hour: 14 },
+  { label: 'EVE',  hour: 18 },
+];
+
+// ── DOM refs ─────────────────────────────────────────────────────────────────
+const locationInput = document.getElementById('locationInput');
+const searchBtn     = document.getElementById('searchBtn');
+const locateBtn     = document.getElementById('locateBtn');
+const splash        = document.getElementById('splash');
+const appEl         = document.getElementById('app');
+const errorEl       = document.getElementById('error');
+const loadingEl     = document.getElementById('loading');
+const locationName  = document.getElementById('locationName');
+const locationCoords= document.getElementById('locationCoords');
+const nowBanner     = document.getElementById('nowBanner');
+const suggestionsEl = document.getElementById('suggestions');
 
 // ── Autocomplete ──────────────────────────────────────────────────────────────
-// Wrap input in a relative div for suggestion dropdown
-(function setupAutocomplete() {
-  const wrapper = document.createElement('div');
-  wrapper.className = 'autocomplete-wrapper';
-  locationInput.parentNode.insertBefore(wrapper, locationInput);
-  wrapper.appendChild(locationInput);
-
-  const ul = document.createElement('ul');
-  ul.id = 'suggestions';
-  wrapper.appendChild(ul);
-})();
-
-const suggestionsEl = document.getElementById('suggestions');
 let debounceTimer;
-
 locationInput.addEventListener('input', () => {
   clearTimeout(debounceTimer);
   const q = locationInput.value.trim();
@@ -39,22 +31,17 @@ locationInput.addEventListener('input', () => {
 
 async function fetchSuggestions(q) {
   try {
-    const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=5&language=en&format=json`;
-    const res = await fetch(url);
+    const res  = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=5&language=en&format=json`);
     const data = await res.json();
     renderSuggestions(data.results || []);
-  } catch (_) {
-    suggestionsEl.innerHTML = '';
-  }
+  } catch (_) { suggestionsEl.innerHTML = ''; }
 }
 
 function renderSuggestions(results) {
   suggestionsEl.innerHTML = '';
   results.forEach(r => {
     const li = document.createElement('li');
-    const country = r.country_code ? ` · ${r.country_code}` : '';
-    const admin   = r.admin1 ? `, ${r.admin1}` : '';
-    li.textContent = `${r.name}${admin}${country}`;
+    li.textContent = [r.name, r.admin1, r.country_code].filter(Boolean).join(', ');
     li.addEventListener('click', () => {
       locationInput.value = li.textContent;
       suggestionsEl.innerHTML = '';
@@ -78,25 +65,21 @@ async function doSearch() {
   if (!q) return;
   showLoading();
   try {
-    const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=1&language=en&format=json`;
-    const res  = await fetch(url);
+    const res  = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=1&language=en&format=json`);
     const data = await res.json();
-    if (!data.results || !data.results.length) throw new Error(`No results found for "${q}".`);
+    if (!data.results?.length) throw new Error(`No results found for "${q}".`);
     const r = data.results[0];
-    const label = [r.name, r.admin1, r.country_code].filter(Boolean).join(', ');
-    loadForecast(r.latitude, r.longitude, label);
-  } catch (err) {
-    showError(err.message);
-  }
+    loadForecast(r.latitude, r.longitude, [r.name, r.admin1, r.country_code].filter(Boolean).join(', '));
+  } catch (err) { showError(err.message); }
 }
 
 locateBtn.addEventListener('click', () => {
-  if (!navigator.geolocation) { showError('Geolocation is not supported by your browser.'); return; }
+  if (!navigator.geolocation) { showError('Geolocation not supported by your browser.'); return; }
   showLoading();
   navigator.geolocation.getCurrentPosition(
-    pos => {
-      const { latitude, longitude } = pos.coords;
-      reverseGeocode(latitude, longitude).then(name => loadForecast(latitude, longitude, name));
+    async ({ coords: { latitude: lat, longitude: lon } }) => {
+      const name = await reverseGeocode(lat, lon);
+      loadForecast(lat, lon, name);
     },
     () => showError('Could not get your location. Please allow location access and try again.')
   );
@@ -104,330 +87,360 @@ locateBtn.addEventListener('click', () => {
 
 async function reverseGeocode(lat, lon) {
   try {
-    const url = `https://geocoding-api.open-meteo.com/v1/search?name=&latitude=${lat}&longitude=${lon}&count=1&language=en&format=json`;
-    const res  = await fetch(url);
+    const res  = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=&latitude=${lat}&longitude=${lon}&count=1&language=en&format=json`);
     const data = await res.json();
-    if (data.results && data.results[0]) return data.results[0].name;
+    if (data.results?.[0]) return data.results[0].name;
   } catch (_) {}
   return `${lat.toFixed(3)}, ${lon.toFixed(3)}`;
 }
 
-// ── Data fetching ─────────────────────────────────────────────────────────────
+// ── API ───────────────────────────────────────────────────────────────────────
 async function loadForecast(lat, lon, name) {
   showLoading();
   try {
-    const [marine, tideData] = await Promise.all([
-      fetchMarine(lat, lon),
-      fetchTides(lat, lon),
+    const marineVars = 'wave_height,wave_period,wave_direction,swell_wave_height,swell_wave_period,swell_wave_direction';
+    const [mRes, wRes] = await Promise.all([
+      fetch(`https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}&hourly=${marineVars}&timezone=auto&forecast_days=7`),
+      fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=windspeed_10m,winddirection_10m&timezone=auto&forecast_days=7`),
     ]);
-    renderAll(lat, lon, name, marine, tideData);
+    if (!mRes.ok) throw new Error('Marine API error — this location may be inland or unsupported.');
+    if (!wRes.ok) throw new Error('Weather API error.');
+    const [marine, weather] = await Promise.all([mRes.json(), wRes.json()]);
+    renderAll(lat, lon, name, marine, weather);
   } catch (err) {
     showError(`Failed to load forecast: ${err.message}`);
   }
 }
 
-async function fetchMarine(lat, lon) {
-  const vars = [
-    'wave_height', 'wave_period', 'wave_direction',
-    'swell_wave_height', 'swell_wave_period', 'swell_wave_direction',
-    'wind_wave_height',
-    'ocean_current_velocity',
-  ].join(',');
-
-  const windVars = 'windspeed_10m,winddirection_10m,weathercode';
-
-  const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}&hourly=${vars}&daily=wave_height_max,wave_period_max,wind_wave_height_max&timezone=auto&forecast_days=7`;
-  const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=${windVars}&daily=windspeed_10m_max,winddirection_10m_dominant&timezone=auto&forecast_days=7`;
-
-  const [marineRes, weatherRes] = await Promise.all([fetch(marineUrl), fetch(weatherUrl)]);
-
-  if (!marineRes.ok) throw new Error('Marine API error — this location may be inland or unsupported.');
-  if (!weatherRes.ok) throw new Error('Weather API error.');
-
-  const marineData  = await marineRes.json();
-  const weatherData = await weatherRes.json();
-  return { marine: marineData, weather: weatherData };
-}
-
-async function fetchTides(lat, lon) {
-  // Open-Meteo doesn't have a tide API; we derive tide proxies from marine hourly wave height
-  // and simulate tides using a simple sinusoidal model based on location.
-  // For real tides, a dedicated API (WorldTides, NOAA, etc.) would be needed.
-  return null;
-}
-
-// ── Rendering ─────────────────────────────────────────────────────────────────
-function renderAll(lat, lon, name, { marine, weather }, tides) {
-  locationName.textContent  = name;
+// ── Master render ─────────────────────────────────────────────────────────────
+function renderAll(lat, lon, name, marine, weather) {
+  locationName.textContent   = name;
   locationCoords.textContent = `${lat.toFixed(4)}°, ${lon.toFixed(4)}°`;
 
   const mh = marine.hourly;
   const wh = weather.hourly;
-  const md = marine.daily;
-  const wd = weather.daily;
+  const now = new Date();
 
-  // Find the current hour index
-  const now       = new Date();
-  const nowStr    = now.toISOString().slice(0, 13); // "2025-06-13T12"
-  const hourIdx   = mh.time.findIndex(t => t.startsWith(nowStr));
-  const safeHour  = hourIdx >= 0 ? hourIdx : 0;
+  const todayStr = now.toISOString().slice(0, 10);
+  const nowHStr  = now.toISOString().slice(0, 13);
+  const baseIdx  = Math.max(0, mh.time.findIndex(t => t.startsWith(todayStr)));
+  const nowIdx   = mh.time.findIndex(t => t.startsWith(nowHStr));
+  const safeNow  = nowIdx >= 0 ? nowIdx : baseIdx + now.getHours();
 
-  renderCurrentConditions(mh, wh, safeHour);
-  renderForecastTable(md, wd, mh, wh);
-  renderTides(md, lat, lon);
-
+  renderNowBanner(mh, wh, safeNow);
+  renderForecastGrid(mh, wh, baseIdx);
+  renderTides(lat, lon);
   showApp();
 }
 
-function renderCurrentConditions(mh, wh, idx) {
-  const waveH   = mh.wave_height[idx];
-  const wavePer = mh.wave_period[idx];
-  const waveDir = mh.wave_direction[idx];
-  const windSpd = wh.windspeed_10m[idx];
-  const windDir = wh.winddirection_10m[idx];
-  const swellH  = mh.swell_wave_height?.[idx];
-  const swellPer= mh.swell_wave_period?.[idx];
+function safeVal(arr, idx) {
+  return arr && idx >= 0 && idx < arr.length ? arr[idx] : null;
+}
 
-  const rating  = surfRating(waveH, wavePer, windSpd, windDir, waveDir);
+// ── Current conditions banner ─────────────────────────────────────────────────
+function renderNowBanner(mh, wh, idx) {
+  const waveH   = safeVal(mh.wave_height, idx);
+  const wavePer = safeVal(mh.wave_period, idx);
+  const waveDir = safeVal(mh.wave_direction, idx);
+  const swellH  = safeVal(mh.swell_wave_height, idx);
+  const windSpd = safeVal(wh.windspeed_10m, idx);
+  const windDir = safeVal(wh.winddirection_10m, idx);
+  const stars   = surfStars(waveH, wavePer, windSpd, windDir, waveDir);
 
-  currentConds.innerHTML = `
-    <div class="cond-card">
-      <div class="icon">🌊</div>
-      <div class="label">Wave Height</div>
-      <div class="value">${fmt(waveH, 1)}</div>
-      <div class="unit">m</div>
+  nowBanner.innerHTML = `
+    <div class="now-stat">
+      <span class="ns-label">Now</span>
+      <span class="ns-value"><span class="stars ${starsClass(stars)}">${renderStars(stars)}</span></span>
     </div>
-    <div class="cond-card">
-      <div class="icon">⏱️</div>
-      <div class="label">Wave Period</div>
-      <div class="value">${fmt(wavePer, 0)}</div>
-      <div class="unit">s</div>
+    <div class="now-stat">
+      <span class="ns-label">Waves</span>
+      <span class="ns-value ${waveClass(waveH)}">${fmt(waveH,1)}<small>m</small></span>
     </div>
-    <div class="cond-card">
-      <div class="icon">🧭</div>
-      <div class="label">Wave Dir</div>
-      <div class="value">${dirArrow(waveDir)}</div>
-      <div class="unit">${dirName(waveDir)}</div>
+    <div class="now-stat">
+      <span class="ns-label">Period</span>
+      <span class="ns-value">${fmt(wavePer,0)}<small>s</small></span>
     </div>
-    <div class="cond-card">
-      <div class="icon">💨</div>
-      <div class="label">Wind</div>
-      <div class="value">${fmt(windSpd, 0)}</div>
-      <div class="unit">km/h ${dirName(windDir)}</div>
+    <div class="now-stat">
+      <span class="ns-label">Swell</span>
+      <span class="ns-value">${fmt(swellH,1)}<small>m</small></span>
     </div>
-    ${swellH != null ? `
-    <div class="cond-card">
-      <div class="icon">〰️</div>
-      <div class="label">Swell Height</div>
-      <div class="value">${fmt(swellH, 1)}</div>
-      <div class="unit">m</div>
-    </div>` : ''}
-    ${swellPer != null ? `
-    <div class="cond-card">
-      <div class="icon">📐</div>
-      <div class="label">Swell Period</div>
-      <div class="value">${fmt(swellPer, 0)}</div>
-      <div class="unit">s</div>
-    </div>` : ''}
-    <div class="cond-card">
-      <div class="icon">⭐</div>
-      <div class="label">Surf Rating</div>
-      <div class="value" style="margin-top:.25rem">${ratingBadge(rating)}</div>
+    <div class="now-stat">
+      <span class="ns-label">Wind</span>
+      <span class="ns-value ${windClass(windSpd,windDir,waveDir)}">${dirArrow(windDir)} ${fmt(windSpd,0)}<small>km/h</small></span>
+    </div>
+    <div class="now-stat">
+      <span class="ns-label">Direction</span>
+      <span class="ns-value">${dirArrow(waveDir)} ${dirName(waveDir)}</span>
     </div>
   `;
 }
 
-function renderForecastTable(md, wd, mh, wh) {
-  const days = md.time;
-  forecastBody.innerHTML = '';
+// ── MSW-style forecast grid ───────────────────────────────────────────────────
+function renderForecastGrid(mh, wh, baseIdx) {
+  const now = new Date();
+  const days = [];
 
-  days.forEach((dateStr, i) => {
-    const waveH   = md.wave_height_max[i];
-    const wavePer = md.wave_period_max[i];
-    const windSpd = wd.windspeed_10m_max[i];
-    const windDir = wd.winddirection_10m_dominant[i];
-    const swellDir= avgDailyDir(mh.swell_wave_direction, i);
-    const rating  = surfRating(waveH, wavePer, windSpd, windDir, swellDir);
-
-    const d     = new Date(dateStr + 'T12:00:00');
-    const dayName = i === 0 ? 'Today'
-                  : i === 1 ? 'Tomorrow'
-                  : d.toLocaleDateString('en-GB', { weekday: 'short' });
-    const dayDate = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td class="day-cell">
-        <div class="day-name">${dayName}</div>
-        <div class="day-date">${dayDate}</div>
-      </td>
-      <td>${ratingBadge(rating)}</td>
-      <td>${fmt(waveH, 1)} m</td>
-      <td>${fmt(wavePer, 0)} s</td>
-      <td><span class="arrow">${dirArrow(swellDir)}</span> ${dirName(swellDir)}</td>
-      <td>${fmt(windSpd, 0)} km/h</td>
-      <td><span class="arrow">${dirArrow(windDir)}</span> ${dirName(windDir)}</td>
-    `;
-    forecastBody.appendChild(tr);
-  });
-}
-
-function avgDailyDir(arr, dayIdx) {
-  if (!arr) return null;
-  const hoursPerDay = Math.floor(arr.length / 7);
-  const start = dayIdx * hoursPerDay;
-  const slice = arr.slice(start, start + hoursPerDay).filter(v => v != null);
-  if (!slice.length) return null;
-  // Circular mean
-  const sinSum = slice.reduce((s, d) => s + Math.sin(d * Math.PI / 180), 0);
-  const cosSum = slice.reduce((s, d) => s + Math.cos(d * Math.PI / 180), 0);
-  return ((Math.atan2(sinSum, cosSum) * 180 / Math.PI) + 360) % 360;
-}
-
-// ── Tide estimation ───────────────────────────────────────────────────────────
-// Real tides need a dedicated API. We generate a simple sinusoidal semidiurnal
-// proxy (M2 tide, period ~12.42 h) so the UI isn't empty.
-// The height is illustrative — not navigationally accurate.
-function renderTides(md, lat, lon) {
-  const days = md.time;
-  tideGrid.innerHTML = '';
-
-  // Phase offset varies with longitude (rough proxy for phase)
-  const phaseHours = ((lon + 180) / 360) * 12.42;
-
-  days.forEach((dateStr, i) => {
-    const d = new Date(dateStr + 'T00:00:00');
-    const events = simulateTideEvents(d, phaseHours, lat);
-    const dayLabel = i === 0 ? 'Today'
-                   : i === 1 ? 'Tomorrow'
-                   : d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
-
-    const card = document.createElement('div');
-    card.className = 'tide-day';
-    card.innerHTML = `<div class="td-name">${dayLabel}</div>` +
-      events.map(ev => `
-        <div class="tide-event">
-          <span class="t-type">${ev.type === 'H' ? '▲ HW' : '▼ LW'}</span>
-          <span class="t-time">${ev.time}</span>
-          <span class="t-ht">${ev.height}m</span>
-        </div>
-      `).join('');
-    tideGrid.appendChild(card);
-  });
-}
-
-function simulateTideEvents(dayStart, phaseHours, lat) {
-  // Semidiurnal period 12h 25min = 12.4167h
-  const T     = 12.4167;
-  const amp   = 1.5 + 0.5 * Math.abs(Math.cos(lat * Math.PI / 180)); // varies with lat
-  const events = [];
-
-  for (let k = -1; k <= 3; k++) {
-    // High tide times
-    const htHour = phaseHours + k * T;
-    if (htHour >= 0 && htHour < 24) {
-      events.push({ type: 'H', hour: htHour, height: (amp + 0.2 * Math.sin(k)).toFixed(1) });
-    }
-    // Low tide halfway between highs
-    const ltHour = phaseHours + k * T + T / 2;
-    if (ltHour >= 0 && ltHour < 24) {
-      events.push({ type: 'L', hour: ltHour, height: (0.3 + 0.1 * Math.abs(Math.sin(k))).toFixed(1) });
-    }
+  for (let d = 0; d < 7; d++) {
+    const date = new Date(now);
+    date.setDate(date.getDate() + d);
+    const slots = SLOTS.map(slot => {
+      const idx     = baseIdx + d * 24 + slot.hour;
+      const waveH   = safeVal(mh.wave_height, idx);
+      const wavePer = safeVal(mh.wave_period, idx);
+      const waveDir = safeVal(mh.wave_direction, idx);
+      const windSpd = safeVal(wh.windspeed_10m, idx);
+      const windDir = safeVal(wh.winddirection_10m, idx);
+      return { label: slot.label, waveH, wavePer, waveDir, windSpd, windDir,
+               stars: surfStars(waveH, wavePer, windSpd, windDir, waveDir) };
+    });
+    days.push({
+      label:   d === 0 ? 'Today' : d === 1 ? 'Tomorrow' : date.toLocaleDateString('en-GB', { weekday: 'short' }),
+      dateStr: date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
+      slots,
+    });
   }
 
-  return events
-    .sort((a, b) => a.hour - b.hour)
-    .slice(0, 4)
-    .map(ev => ({
-      type:   ev.type,
-      time:   formatHour(ev.hour),
-      height: ev.height,
-    }));
+  const S = SLOTS.length;
+
+  let t = '<table class="msw-table" cellspacing="0">';
+
+  // ── Row 1: Day headers ──
+  t += '<tr class="tr-days"><th class="th-label"></th>';
+  days.forEach(day => {
+    t += `<th class="th-day" colspan="${S}"><div class="dh-name">${day.label}</div><div class="dh-date">${day.dateStr}</div></th>`;
+  });
+  t += '</tr>';
+
+  // ── Row 2: Slot sub-headers ──
+  t += '<tr class="tr-slots"><th class="th-label"></th>';
+  days.forEach(day => {
+    day.slots.forEach((s, i) => {
+      t += `<th class="th-slot${i === 0 ? ' ds' : ''}">${s.label}</th>`;
+    });
+  });
+  t += '</tr>';
+
+  // ── Row 3: Stars ──
+  t += '<tr class="tr-data">';
+  t += '<td class="td-label">Rating</td>';
+  days.forEach(day => {
+    day.slots.forEach((s, i) => {
+      const rc = s.stars >= 4 ? ` r${s.stars}` : '';
+      t += `<td class="td-slot td-rating${i===0?' ds':''}${rc}"><span class="stars ${starsClass(s.stars)}">${renderStars(s.stars)}</span></td>`;
+    });
+  });
+  t += '</tr>';
+
+  // ── Row 4: Wave height ──
+  t += '<tr class="tr-data tr-alt">';
+  t += '<td class="td-label">Waves</td>';
+  days.forEach(day => {
+    day.slots.forEach((s, i) => {
+      t += `<td class="td-slot td-wave${i===0?' ds':''}"><span class="${waveClass(s.waveH)}">${fmt(s.waveH,1)}<small>m</small></span></td>`;
+    });
+  });
+  t += '</tr>';
+
+  // ── Row 5: Period ──
+  t += '<tr class="tr-data">';
+  t += '<td class="td-label">Period</td>';
+  days.forEach(day => {
+    day.slots.forEach((s, i) => {
+      t += `<td class="td-slot${i===0?' ds':''}">${fmt(s.wavePer,0)}<small>s</small></td>`;
+    });
+  });
+  t += '</tr>';
+
+  // ── Row 6: Wind ──
+  t += '<tr class="tr-data tr-alt">';
+  t += '<td class="td-label">Wind</td>';
+  days.forEach(day => {
+    day.slots.forEach((s, i) => {
+      const wc = windClass(s.windSpd, s.windDir, s.waveDir);
+      t += `<td class="td-slot td-wind${i===0?' ds':''}">
+        <span class="wind-arrow ${wc}">${dirArrow(s.windDir)}</span>
+        <span class="${wc}">${fmt(s.windSpd,0)}</span>
+      </td>`;
+    });
+  });
+  t += '</tr>';
+
+  // ── Row 7: Swell direction ──
+  t += '<tr class="tr-data">';
+  t += '<td class="td-label">Swell</td>';
+  days.forEach(day => {
+    day.slots.forEach((s, i) => {
+      t += `<td class="td-slot${i===0?' ds':''}">${dirArrow(s.waveDir)} <small>${dirName(s.waveDir)}</small></td>`;
+    });
+  });
+  t += '</tr>';
+
+  t += '</table>';
+  document.getElementById('forecastGrid').innerHTML = t;
 }
 
-function formatHour(h) {
-  const total = Math.round(h * 60);
-  const hh = Math.floor(total / 60) % 24;
-  const mm = total % 60;
-  return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+// ── Tide section ──────────────────────────────────────────────────────────────
+// Semidiurnal (M2) tide estimate — illustrative only, not navigational.
+function renderTides(lat, lon) {
+  const tideRow = document.getElementById('tideRow');
+  // Phase: use longitude to roughly offset local HW time
+  const phaseH = ((lon + 180) / 360) * 12.42;
+  const amp    = 1.5 + 0.5 * Math.abs(Math.cos(lat * Math.PI / 180));
+  const now    = new Date();
+
+  tideRow.innerHTML = '';
+  for (let d = 0; d < 7; d++) {
+    const date = new Date(now);
+    date.setDate(date.getDate() + d);
+    const dayLabel = d === 0 ? 'Today'
+                   : d === 1 ? 'Tomorrow'
+                   : date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+    const events = tideEvents(phaseH, amp, d);
+    const card   = document.createElement('div');
+    card.className = 'tide-card';
+    card.innerHTML = `<div class="tc-day">${dayLabel}</div>
+      ${tideSVG(phaseH, amp, d)}
+      ${events.map(e => `
+        <div class="tide-event">
+          <span class="${e.type === 'H' ? 't-type-hw' : 't-type-lw'}">${e.type === 'H' ? '▲ HW' : '▼ LW'}</span>
+          <span class="t-time">${e.time}</span>
+          <span class="t-ht">${e.height}m</span>
+        </div>`).join('')}`;
+    tideRow.appendChild(card);
+  }
 }
 
-// ── Surf quality rating ───────────────────────────────────────────────────────
-function surfRating(waveH, wavePer, windSpd, windDir, swellDir) {
-  if (waveH == null) return 'flat';
+function tideEvents(phaseH, amp, dayOff) {
+  const T = 12.4167;
+  const events = [];
+  for (let k = -2; k <= 5; k++) {
+    const hwAbs = phaseH + k * T;
+    const hwRel = hwAbs - dayOff * 24;
+    if (hwRel >= 0 && hwRel < 24) {
+      events.push({ type: 'H', hour: hwRel, height: (amp * 0.92 + 0.1 * Math.sin(k * 0.8)).toFixed(1) });
+    }
+    const lwRel = hwRel + T / 2;
+    if (lwRel >= 0 && lwRel < 24) {
+      events.push({ type: 'L', hour: lwRel, height: (amp * 0.1 + 0.05 * Math.abs(Math.cos(k))).toFixed(1) });
+    }
+  }
+  return events.sort((a, b) => a.hour - b.hour).map(e => ({ ...e, time: fmtH(e.hour) }));
+}
 
+function tideSVG(phaseH, amp, dayOff) {
+  const W = 94, H = 34, P = 3, T = 12.4167;
+  const pts = [];
+  for (let i = 0; i <= 48; i++) {
+    const hr = (i / 48) * 24;
+    const th = amp * Math.cos(2 * Math.PI * (hr + dayOff * 24 - phaseH) / T);
+    pts.push(`${(P + (i/48) * (W-2*P)).toFixed(1)},${(P + (1 - (th+amp)/(2*amp)) * (H-2*P)).toFixed(1)}`);
+  }
+  const path = 'M ' + pts.join(' L ');
+  const dots = tideEvents(phaseH, amp, dayOff).map(e => {
+    const th = amp * Math.cos(2 * Math.PI * (e.hour + dayOff * 24 - phaseH) / T);
+    const cx = (P + (e.hour/24) * (W-2*P)).toFixed(1);
+    const cy = (P + (1 - (th+amp)/(2*amp)) * (H-2*P)).toFixed(1);
+    return `<circle cx="${cx}" cy="${cy}" r="2.5" fill="${e.type==='H'?'#60a5fa':'#475569'}"/>`;
+  }).join('');
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block;margin:.3rem 0 .35rem">
+    <path d="${path}" fill="none" stroke="#1e3a5f" stroke-width="3"/>
+    <path d="${path}" fill="none" stroke="#38bdf8" stroke-width="1.5" opacity=".75"/>
+    ${dots}
+  </svg>`;
+}
+
+function fmtH(h) {
+  const t = Math.round(h * 60);
+  return `${String(Math.floor(t/60)%24).padStart(2,'0')}:${String(t%60).padStart(2,'0')}`;
+}
+
+// ── Surf star rating (0–5) ────────────────────────────────────────────────────
+function surfStars(waveH, wavePer, windSpd, windDir, swellDir) {
+  if (!waveH || waveH < 0.3) return 0;
   let score = 0;
 
-  // Wave height (0–4 pts)
-  if (waveH >= 1.5 && waveH <= 3.5) score += 4;
-  else if (waveH >= 0.8)            score += 2;
-  else if (waveH >= 0.4)            score += 1;
+  // Wave height
+  if      (waveH >= 3.0) score += 6;
+  else if (waveH >= 2.0) score += 5;
+  else if (waveH >= 1.5) score += 4;
+  else if (waveH >= 1.0) score += 3;
+  else if (waveH >= 0.6) score += 1;
 
-  // Period (0–3 pts) — longer = cleaner energy
-  if (wavePer >= 14)     score += 3;
-  else if (wavePer >= 10) score += 2;
-  else if (wavePer >= 7)  score += 1;
+  // Period (longer = cleaner energy)
+  if      (wavePer >= 15) score += 4;
+  else if (wavePer >= 12) score += 3;
+  else if (wavePer >= 9)  score += 2;
+  else if (wavePer >= 6)  score += 1;
 
-  // Wind (0–3 pts) — light offshore is best
-  const offshoreAngle = swellDir != null ? Math.abs(angleDiff(windDir, swellDir + 180)) : 90;
-  if (windSpd < 10 && offshoreAngle < 45) score += 3;
-  else if (windSpd < 15)                  score += 2;
-  else if (windSpd < 25)                  score += 1;
+  // Wind (offshore + light = best)
+  const offshore = windDir != null && swellDir != null &&
+    angleDiff(windDir, (swellDir + 180) % 360) < 50;
+  if (windSpd != null) {
+    if      (windSpd < 10 && offshore)  score += 5;
+    else if (windSpd < 15 && offshore)  score += 4;
+    else if (windSpd < 10)              score += 3;
+    else if (windSpd < 20)              score += 2;
+    else if (windSpd < 30)              score += 1;
+  }
 
-  if (waveH < 0.3)   return 'flat';
-  if (score >= 8)     return 'epic';
-  if (score >= 5)     return 'good';
-  if (score >= 3)     return 'ok';
-  return 'poor';
+  if (score >= 13) return 5;
+  if (score >= 10) return 4;
+  if (score >= 7)  return 3;
+  if (score >= 4)  return 2;
+  return 1;
 }
 
 function angleDiff(a, b) {
   let d = ((a - b) + 360) % 360;
-  if (d > 180) d -= 360;
-  return d;
+  return d > 180 ? 360 - d : d;
 }
 
-function ratingBadge(r) {
-  const labels = { epic: '★ Epic', good: '▲ Good', ok: '~ OK', poor: '▽ Poor', flat: '— Flat' };
-  return `<span class="rating ${r}">${labels[r] || r}</span>`;
+function renderStars(n) { return '★'.repeat(n) + '☆'.repeat(5 - n); }
+function starsClass(n)  { return `stars-${n}`; }
+
+function waveClass(h) {
+  if (!h || h < 0.3) return 'wh-flat';
+  if (h < 0.8)  return 'wh-small';
+  if (h < 1.5)  return 'wh-medium';
+  if (h < 2.5)  return 'wh-good';
+  if (h < 4.0)  return 'wh-big';
+  return 'wh-huge';
+}
+
+function windClass(spd, dir, waveDir) {
+  if (dir == null || spd == null) return '';
+  if (spd > 35) return 'wind-on';
+  if (waveDir != null) {
+    const d = angleDiff(dir, (waveDir + 180) % 360);
+    if (d < 50)  return 'wind-off';
+    if (d < 100) return 'wind-cross';
+    return 'wind-on';
+  }
+  return spd < 15 ? 'wind-off' : spd < 25 ? 'wind-cross' : 'wind-on';
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function fmt(v, decimals) {
+function fmt(v, dec) {
   if (v == null || isNaN(v)) return '—';
-  return Number(v).toFixed(decimals);
+  return Number(v).toFixed(dec);
 }
 
-function dirArrow(deg) {
-  if (deg == null) return '—';
-  const dirs = ['↑','↗','→','↘','↓','↙','←','↖'];
-  return dirs[Math.round(deg / 45) % 8];
-}
-
-function dirName(deg) {
-  if (deg == null) return '';
-  const dirs = ['N','NE','E','SE','S','SW','W','NW'];
-  return dirs[Math.round(deg / 45) % 8];
-}
+const ARROWS = ['↑','↗','→','↘','↓','↙','←','↖'];
+const NAMES  = ['N','NE','E','SE','S','SW','W','NW'];
+function dirArrow(d) { return d == null ? '—' : ARROWS[Math.round(d/45)%8]; }
+function dirName(d)  { return d == null ? '' : NAMES[Math.round(d/45)%8]; }
 
 // ── UI state ──────────────────────────────────────────────────────────────────
 function showLoading() {
-  splash.classList.add('hidden');
-  appEl.classList.add('hidden');
-  errorEl.classList.add('hidden');
+  [splash, appEl, errorEl].forEach(el => el.classList.add('hidden'));
   loadingEl.classList.remove('hidden');
 }
-
 function showApp() {
-  loadingEl.classList.add('hidden');
-  errorEl.classList.add('hidden');
-  splash.classList.add('hidden');
+  [loadingEl, errorEl, splash].forEach(el => el.classList.add('hidden'));
   appEl.classList.remove('hidden');
 }
-
 function showError(msg) {
-  loadingEl.classList.add('hidden');
-  appEl.classList.add('hidden');
+  [loadingEl, appEl].forEach(el => el.classList.add('hidden'));
   errorEl.textContent = msg;
   errorEl.classList.remove('hidden');
   splash.classList.remove('hidden');
