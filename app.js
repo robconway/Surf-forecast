@@ -410,13 +410,13 @@ async function fetchWindyForecast(lat, lon, model) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       lat, lon, model,
-      parameters: ['waves', 'swell1', 'swell2', 'windU', 'windV'],
-      levels: ['surface'],
+      parameters: ['waves', 'swell1', 'windU', 'windV'],
       key: WINDY_FORECAST_KEY,
     }),
   });
-  if (!res.ok) throw new Error(`Windy ${model.toUpperCase()} unavailable for this location.`);
-  const d = await res.json();
+  const text = await res.text();
+  if (!res.ok) throw new Error(`Windy ${model.toUpperCase()} (${res.status}): ${text.slice(0, 120)}`);
+  const d = JSON.parse(text);
   if (d.error) throw new Error(`Windy: ${d.error}`);
 
   const times = (d.ts || []).map(ts => new Date(ts).toISOString().slice(0, 16));
