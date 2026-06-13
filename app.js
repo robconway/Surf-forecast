@@ -387,8 +387,6 @@ function renderNowBanner(mh, wh, idx) {
 
   const waveHFt  = waveH  != null ? Math.round(waveH  * 3.281) : null;
   const swellHFt = swellH != null ? Math.round(swellH * 3.281) : null;
-  const windMph  = windSpd != null ? Math.round(windSpd * 0.621) : null;
-
   nowBanner.innerHTML = `
     <div class="now-stat">
       <span class="ns-label">Now</span>
@@ -408,7 +406,7 @@ function renderNowBanner(mh, wh, idx) {
     </div>
     <div class="now-stat">
       <span class="ns-label">Wind</span>
-      <span class="ns-value ${windClass(windSpd,windDir,waveDir)}">${dirArrow(windDir)} ${windMph ?? '—'}<small>mph</small></span>
+      <span class="ns-value ${windClass(windSpd,windDir,waveDir)}">${dirArrow(windDir)} ${windSpd != null ? Math.round(windSpd) : '—'}<small>km/h</small></span>
     </div>
     <div class="now-stat">
       <span class="ns-label">Direction</span>
@@ -457,8 +455,7 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
       const range   = waveRangeFt(mh, baseIdx, d, slot.hour, slot.spread);
       const rangeStr= range ? `${range.lo}-${range.hi}` : '—';
 
-      // Wind in mph
-      const windMph = windSpd != null ? Math.round(windSpd * 0.621) : null;
+      const windKph = windSpd != null ? Math.round(windSpd) : null;
       const wc      = windClass(windSpd, windDir, waveDir);
       const badge   = wc === 'wind-off' ? 'badge-off' : wc === 'wind-cross' ? 'badge-cross' : 'badge-on';
 
@@ -483,7 +480,7 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
           <div class="swell-meta">${dirArrow(waveDir)} <span class="swell-deg">${waveDir != null ? Math.round(waveDir)+'°' : ''}</span></div>
         </div>
         <div class="msw-wind">
-          <div class="wind-mph">${windMph ?? '—'}<small>mph</small></div>
+          <div class="wind-mph">${windKph ?? '—'}<small>km/h</small></div>
           <div class="wind-badge ${badge}">${dirName(windDir) || '—'}</div>
         </div>
       </div>`;
