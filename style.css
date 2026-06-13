@@ -182,6 +182,44 @@ main { flex: 1; padding: 1.25rem 1.25rem 2.5rem; max-width: 820px; margin: 0 aut
 .spot-dist { font-size: .68rem; color: var(--muted); margin-left: .25rem; }
 .nearby-loading { font-size: .8rem; color: var(--muted); margin-left: .4rem; }
 
+/* ── Webcam section ─────────────────────────────────────────────────────────── */
+.webcam-section { margin-bottom: 1.25rem; }
+.section-label {
+  font-size: .7rem; text-transform: uppercase;
+  letter-spacing: .1em; color: var(--muted);
+  margin-bottom: .6rem; padding-bottom: .4rem;
+  border-bottom: 1px solid var(--border);
+}
+.webcam-row {
+  display: flex; gap: .65rem;
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+  padding-bottom: .3rem;
+}
+.webcam-card {
+  flex-shrink: 0; width: 155px;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden;
+  text-decoration: none; color: var(--text);
+  transition: border-color .15s;
+  display: block;
+}
+.webcam-card:hover { border-color: var(--accent); }
+.webcam-card img {
+  width: 100%; height: 88px; object-fit: cover; display: block;
+}
+.wc-no-img {
+  width: 100%; height: 88px; display: flex;
+  align-items: center; justify-content: center;
+  font-size: 1.8rem; background: var(--bg3); color: var(--muted);
+}
+.wc-name {
+  font-size: .75rem; font-weight: 600;
+  padding: .35rem .5rem .1rem;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.wc-dist { font-size: .68rem; color: var(--muted); padding: 0 .5rem .45rem; }
+.wc-loading { font-size: .8rem; color: var(--muted); }
+
 /* ── Now banner ─────────────────────────────────────────────────────────────── */
 .now-banner {
   display: flex; align-items: stretch;

@@ -1,5 +1,7 @@
 'use strict';
 
+const WINDY_KEY = 'nLTvWT2UmcDdp3GkdRiQWDFUdRR5wY19';
+
 // ── Time slots (MSW style: rows) ──────────────────────────────────────────────
 const SLOTS = [
   { label: 'DAWN', hour: 6,  spread: 2 },
@@ -199,6 +201,50 @@ function nearestSpots(lat, lon, n = 3) {
     .slice(0, n);
 }
 
+// ── Webcams (Windy API) ───────────────────────────────────────────────────────
+async function fetchWebcams(lat, lon) {
+  const url = `https://api.windy.com/api/webcams/v2/list/nearby/${lat},${lon},100` +
+              `?show=webcams:image,location,url&key=${WINDY_KEY}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('Windy API error');
+  const data = await res.json();
+  return (data.result?.webcams || []).filter(w => w.status === 'active');
+}
+
+function renderWebcams(lat, lon) {
+  const section = document.getElementById('webcamSection');
+  const row     = document.getElementById('webcamRow');
+  row.innerHTML = '<span class="wc-loading">Loading cameras…</span>';
+  section.classList.remove('hidden');
+
+  fetchWebcams(lat, lon)
+    .then(cams => {
+      if (!cams.length) { section.classList.add('hidden'); return; }
+      const sorted = cams
+        .map(c => ({ ...c, dist: haversine(lat, lon, c.location.latitude, c.location.longitude) }))
+        .sort((a, b) => a.dist - b.dist)
+        .slice(0, 6);
+
+      row.innerHTML = '';
+      sorted.forEach(c => {
+        const thumb = c.image?.current?.preview || c.image?.current?.thumbnail;
+        const link  = c.url?.current?.desktop   || `https://www.windy.com/webcams/${c.id}`;
+        const card  = document.createElement('a');
+        card.className = 'webcam-card';
+        card.href      = link;
+        card.target    = '_blank';
+        card.rel       = 'noopener noreferrer';
+        card.innerHTML = `
+          ${thumb ? `<img src="${thumb}" alt="${c.title}" loading="lazy"/>` : '<div class="wc-no-img">📷</div>'}
+          <div class="wc-name">${c.title}</div>
+          <div class="wc-dist">${Math.round(c.dist)}km away</div>`;
+        row.appendChild(card);
+      });
+    })
+    .catch(() => section.classList.add('hidden'));
+}
+
+// ── Nearest surf spots (OSM) ──────────────────────────────────────────────────
 // Query OpenStreetMap via Overpass API for real surf spots nearby
 async function fetchOSMSpots(lat, lon) {
   const q = `[out:json][timeout:10];(node["sport"="surfing"](around:300000,${lat},${lon});way["sport"="surfing"](around:300000,${lat},${lon}););out center;`;
@@ -294,6 +340,7 @@ function renderAll(lat, lon, name, marine, weather) {
   const safeNow  = nowIdx >= 0 ? nowIdx : baseIdx + now.getHours();
 
   renderNearbySpots(lat, lon);
+  renderWebcams(lat, lon);
   renderNowBanner(mh, wh, safeNow);
   renderForecastGrid(mh, wh, baseIdx, lat, lon);
   showApp();
