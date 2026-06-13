@@ -247,12 +247,18 @@ function renderWebcams(lat, lon) {
 // ── Nearest surf spots (OSM) ──────────────────────────────────────────────────
 // Query OpenStreetMap via Overpass API for real surf spots nearby
 async function fetchOSMSpots(lat, lon) {
-  const q = `[out:json][timeout:10];(node["sport"="surfing"](around:300000,${lat},${lon});way["sport"="surfing"](around:300000,${lat},${lon}););out center;`;
+  // Exclude surf schools, shops and clubs at the query level
+  const filters = `["sport"="surfing"][!"amenity"][!"shop"][!"club"]["leisure"!="sports_centre"]`;
+  const q = `[out:json][timeout:10];(`+
+    `node${filters}(around:300000,${lat},${lon});`+
+    `way${filters}(around:300000,${lat},${lon});`+
+    `);out center;`;
   const res = await fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(q)}`);
   if (!res.ok) throw new Error('Overpass error');
   const data = await res.json();
+  const COMMERCIAL = /school|shop|hire|lesson|academy|coaching|tuition|club|centre|center|ltd|co\.|llc/i;
   return data.elements
-    .filter(el => el.tags?.name)
+    .filter(el => el.tags?.name && !COMMERCIAL.test(el.tags.name))
     .map(el => ({
       name: el.tags.name,
       lat:  el.lat  ?? el.center?.lat,
