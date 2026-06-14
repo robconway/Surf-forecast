@@ -1,7 +1,7 @@
 'use strict';
 
 const WINDY_KEY  = 'nLTvWT2UmcDdp3GkdRiQWDFUdRR5wY19';
-const SHEETS_URL = ''; // paste your Apps Script web app URL here once deployed
+const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbwk3M1tSBx4gVeQY218gTTvQjNIi5SPOUbFpFRYnHHqRi1JkuTkr14NeuPb3W-pgTXXiw/exec';
 
 // ── Time slots (MSW style: rows) ──────────────────────────────────────────────
 const SLOTS = [
