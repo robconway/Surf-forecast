@@ -546,7 +546,10 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
   loadFeedback().forEach(e => { existingRatings[`${e.date}|${e.slot}`] = e.actual; });
   const isoToday = now.toISOString().slice(0, 10);
 
-  let html = '';
+  let html = `<div class="rate-callout">
+    <span class="rate-callout-star">★</span>
+    Rate each session after surfing — the app learns from your ratings to sharpen future predictions for you personally.
+  </div>`;
 
   for (let d = 0; d < 7; d++) {
     const date = new Date(now);
