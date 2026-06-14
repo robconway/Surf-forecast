@@ -3,6 +3,16 @@
 const WINDY_KEY  = 'nLTvWT2UmcDdp3GkdRiQWDFUdRR5wY19';
 const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbwk3M1tSBx4gVeQY218gTTvQjNIi5SPOUbFpFRYnHHqRi1JkuTkr14NeuPb3W-pgTXXiw/exec';
 
+const FB_PROMPTS = [
+  'Worth getting up for?', 'Live up to the forecast?', 'Glad you paddled out?',
+  'Worth the wetsuit struggle?', 'Better than work?',
+  'Did we lie?', 'Were we close?', 'How wrong were we?', 'Rate our guess:',
+  'Stoked or skunked?', 'How\'d it go?', 'Get barrelled?',
+  'Should\'ve been here an hour ago?', 'Magic or tragic?',
+  'Worth the drive?', 'Regret it?', 'Tell us the truth:',
+];
+function fbPrompt() { return FB_PROMPTS[Math.floor(Math.random() * FB_PROMPTS.length)]; }
+
 // ── Time slots (MSW style: rows) ──────────────────────────────────────────────
 const SLOTS = [
   { label: 'DAWN', hour: 6,  spread: 2 },
@@ -635,7 +645,7 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
                  data-lat="${lat}" data-lon="${lon}"
                  data-wh="${waveH?.toFixed(2) ?? ''}" data-per="${wavePer ?? ''}"
                  data-wsp="${windSpd ?? ''}" data-off="${offshore}" data-sdiff="${sdiff}">
-               <span class="fb-label">How was it?</span>
+               <span class="fb-label">${fbPrompt()}</span>
                <span class="fb-stars">
                  ${[1,2,3,4,5].map(v => `<button class="fb-star" data-v="${v}">★</button>`).join('')}
                </span>
