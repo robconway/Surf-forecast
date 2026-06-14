@@ -216,7 +216,16 @@ locateBtn.addEventListener('click', () => {
       const name = await reverseGeocode(lat, lon);
       loadForecast(lat, lon, name);
     },
-    () => showError('Could not get your location. Please allow location access and try again.')
+    (err) => {
+      if (err.code === 1) {
+        showError('Location access was denied. In Safari, go to Settings → Privacy → Location Services and allow access for your browser.');
+      } else if (err.code === 2) {
+        showError('Your location couldn\'t be determined — Macs and desktops sometimes struggle with this. Try searching for your nearest town or surf spot instead.');
+      } else {
+        showError('Location request timed out. Try again, or search for your spot manually.');
+      }
+    },
+    { timeout: 12000, maximumAge: 300000 }
   );
 });
 
