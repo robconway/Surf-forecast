@@ -4,13 +4,15 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Cache-Control" content="no-cache, must-revalidate" />
+  <meta name="theme-color" content="#0b0f1c" />
   <title>Magic Lie Weed</title>
   <link rel="icon" href="logo.png?v=27" type="image/png" />
   <link rel="apple-touch-icon" href="logo.png?v=27" />
+  <link rel="manifest" href="manifest.json" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Magic Lie Weed" />
-  <link rel="stylesheet" href="style.css?v=36" />
+  <link rel="stylesheet" href="style.css?v=38" />
 </head>
 <body>
   <header>
@@ -58,7 +60,7 @@
 
       <div class="nearby-spots hidden" id="nearbySpots"></div>
 
-<div class="now-banner" id="nowBanner"></div>
+      <div class="now-banner" id="nowBanner"></div>
 
       <div id="mswForecast"></div>
 
@@ -72,9 +74,22 @@
   </main>
 
   <footer>
-    Data: <a href="https://open-meteo.com" target="_blank">Open-Meteo</a> Marine &amp; Weather APIs · Free &amp; open source
+    <div class="footer-main">
+      Data: <a href="https://open-meteo.com" target="_blank">Open-Meteo</a> Marine &amp; Weather APIs · Free &amp; open source
+    </div>
+    <div class="crew-row">
+      <label class="crew-label" for="crewInput">👥 Crew code:</label>
+      <input type="text" id="crewInput" class="crew-input" placeholder="e.g. NORTHDEVON" maxlength="12" autocomplete="off" autocapitalize="characters" />
+      <button id="crewSave" class="crew-save">Save</button>
+    </div>
   </footer>
 
-  <script src="app.js?v=37"></script>
+  <div id="installBanner" class="install-banner hidden">
+    <span id="installMsg"></span>
+    <button id="installBtn" class="install-action hidden">Install</button>
+    <button id="installDismiss" class="install-dismiss">✕</button>
+  </div>
+
+  <script src="app.js?v=38"></script>
 </body>
 </html>

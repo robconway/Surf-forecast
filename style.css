@@ -443,12 +443,53 @@ main { flex: 1; padding: 1.25rem 1.25rem 2.5rem; max-width: 820px; margin: 0 aut
 
 /* ── Footer ─────────────────────────────────────────────────────────────────── */
 footer {
-  text-align: center; padding: .75rem;
+  text-align: center; padding: .65rem .75rem .75rem;
   font-size: .75rem; color: var(--muted);
   border-top: 1px solid var(--border); background: #06090f;
 }
 footer a { color: var(--accent); text-decoration: none; }
 footer a:hover { text-decoration: underline; }
+.footer-main { margin-bottom: .55rem; }
+.crew-row {
+  display: flex; align-items: center; justify-content: center;
+  gap: .4rem; flex-wrap: wrap;
+}
+.crew-label { color: var(--muted); white-space: nowrap; }
+.crew-input {
+  padding: .25rem .5rem; font-size: .72rem;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 4px; color: var(--text); width: 9rem;
+  text-transform: uppercase; letter-spacing: .05em;
+}
+.crew-input:focus { outline: none; border-color: var(--accent); }
+.crew-save {
+  padding: .25rem .55rem; font-size: .72rem; font-weight: 600;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 4px; color: var(--muted); cursor: pointer;
+  transition: border-color .15s, color .15s;
+}
+.crew-save:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Install banner ──────────────────────────────────────────────────────────── */
+.install-banner {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  display: flex; align-items: center; gap: .75rem;
+  padding: .75rem 1rem;
+  background: var(--bg2); border-top: 1px solid var(--border);
+  font-size: .8rem; color: var(--text);
+  z-index: 100; box-shadow: 0 -4px 16px rgba(0,0,0,.4);
+}
+.install-banner span { flex: 1; line-height: 1.4; }
+.install-action {
+  padding: .3rem .75rem; font-size: .78rem; font-weight: 600;
+  background: var(--accent); color: #000; border: none;
+  border-radius: 5px; cursor: pointer; white-space: nowrap; flex-shrink: 0;
+}
+.install-dismiss {
+  background: none; border: none; color: var(--muted);
+  font-size: 1rem; cursor: pointer; padding: .1rem .2rem; flex-shrink: 0;
+}
+.install-dismiss:hover { color: var(--text); }
 
 /* ── Responsive ─────────────────────────────────────────────────────────────── */
 @media (max-width: 560px) {

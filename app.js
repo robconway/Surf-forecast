@@ -2,6 +2,18 @@
 
 const WINDY_KEY  = 'nLTvWT2UmcDdp3GkdRiQWDFUdRR5wY19';
 const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbwk3M1tSBx4gVeQY218gTTvQjNIi5SPOUbFpFRYnHHqRi1JkuTkr14NeuPb3W-pgTXXiw/exec';
+const CREW_KEY   = 'mlw_crew';
+
+function getCrewCode() {
+  return (localStorage.getItem(CREW_KEY) || '').toUpperCase().trim() || null;
+}
+function setCrewCode(raw) {
+  const code = (raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
+  if (code) localStorage.setItem(CREW_KEY, code);
+  else localStorage.removeItem(CREW_KEY);
+  fetchGlobalBias();
+  return code;
+}
 
 const FB_PROMPTS = [
   'Worth getting up for?', 'Live up to the forecast?', 'Glad you paddled out?',
@@ -901,7 +913,65 @@ function showApp() {
   [loadingEl, errorEl, splash].forEach(el => el.classList.add('hidden'));
   appEl.classList.remove('hidden');
   document.getElementById('modelTabs').classList.remove('hidden');
+  setTimeout(showInstallBanner, 4000);
 }
+
+// ── Add to Home Screen prompt ─────────────────────────────────────────────────
+let deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+});
+
+function showInstallBanner() {
+  if (localStorage.getItem('mlw_install_dismissed')) return;
+  const isStandalone = window.navigator.standalone ||
+    window.matchMedia('(display-mode: standalone)').matches;
+  if (isStandalone) return;
+
+  const banner = document.getElementById('installBanner');
+  const msg    = document.getElementById('installMsg');
+  const btn    = document.getElementById('installBtn');
+  const isIOS  = /iphone|ipad|ipod/i.test(navigator.userAgent);
+
+  if (isIOS) {
+    msg.innerHTML = '📲 Add to home screen: tap <strong>Share ↑</strong> then <strong>Add to Home Screen</strong>';
+  } else if (deferredInstallPrompt) {
+    msg.textContent = '📲 Install Magic Lie Weed for quick access from your home screen';
+    btn.classList.remove('hidden');
+    btn.addEventListener('click', () => {
+      deferredInstallPrompt.prompt();
+      deferredInstallPrompt.userChoice.then(() => {
+        deferredInstallPrompt = null;
+        banner.classList.add('hidden');
+        localStorage.setItem('mlw_install_dismissed', '1');
+      });
+    });
+  } else {
+    return;
+  }
+
+  banner.classList.remove('hidden');
+  document.getElementById('installDismiss').addEventListener('click', () => {
+    banner.classList.add('hidden');
+    localStorage.setItem('mlw_install_dismissed', '1');
+  });
+}
+
+// ── Crew code UI ──────────────────────────────────────────────────────────────
+(function initCrew() {
+  const input = document.getElementById('crewInput');
+  const btn   = document.getElementById('crewSave');
+  const saved = getCrewCode();
+  if (saved) input.value = saved;
+  btn.addEventListener('click', () => {
+    const code = setCrewCode(input.value);
+    input.value = code;
+    btn.textContent = code ? '✓ Saved' : 'Cleared';
+    setTimeout(() => { btn.textContent = 'Save'; }, 1500);
+  });
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); });
+})();
 
 // Model tab switching
 document.getElementById('modelTabs').addEventListener('click', e => {
@@ -936,15 +1006,17 @@ function deviceId() {
   return id;
 }
 
-// Blend personal bias (from local ratings) with global crowd bias (from sheet)
+// Blend personal, crew, and global crowd bias
 function getStarBias() {
-  const personal = parseFloat(localStorage.getItem('mlw_bias') || '0');
-  const global   = parseFloat(localStorage.getItem('mlw_global_bias') || '0');
-  const count    = loadFeedback().length;
-  // Lean on global bias until user has enough personal ratings
-  if (count >= 10) return personal * 0.8 + global * 0.2;
-  if (count >= 3)  return personal * 0.5 + global * 0.5;
-  return global;
+  const personal   = parseFloat(localStorage.getItem('mlw_bias') || '0');
+  const crewBias   = parseFloat(localStorage.getItem('mlw_crew_bias') || '0');
+  const globalBias = parseFloat(localStorage.getItem('mlw_global_bias') || '0');
+  const count      = loadFeedback().length;
+  // Crew bias replaces global when a crew code is set
+  const community  = getCrewCode() ? crewBias : globalBias;
+  if (count >= 10) return personal * 0.8 + community * 0.2;
+  if (count >= 3)  return personal * 0.5 + community * 0.5;
+  return community;
 }
 
 function recordFeedback(entry) {
@@ -970,12 +1042,13 @@ function recordFeedback(entry) {
         waveH: entry.waveH ?? null, period: entry.period ?? null,
         windSpd: entry.windSpd ?? null, offshore: entry.offshore ?? null,
         swellDiff: entry.swellAngleDiff ?? null,
+        crew: getCrewCode() ?? '',
       }),
     }).catch(() => {});
   }
 }
 
-// Fetch crowd bias from Google Sheet and cache it locally
+// Fetch crowd bias (and crew bias if code set) from Google Sheet
 async function fetchGlobalBias() {
   if (!SHEETS_URL) return;
   try {
@@ -983,6 +1056,14 @@ async function fetchGlobalBias() {
     const data = await res.json();
     if (typeof data.bias === 'number' && data.count >= 5) {
       localStorage.setItem('mlw_global_bias', data.bias.toFixed(3));
+    }
+    const crew = getCrewCode();
+    if (crew) {
+      const cr = await fetch(`${SHEETS_URL}?crew=${encodeURIComponent(crew)}`, { redirect: 'follow' });
+      const cd = await cr.json();
+      if (typeof cd.bias === 'number' && cd.count >= 3) {
+        localStorage.setItem('mlw_crew_bias', cd.bias.toFixed(3));
+      }
     }
   } catch (_) {}
 }
