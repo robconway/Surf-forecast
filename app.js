@@ -740,9 +740,9 @@ function surfScore(waveH, wavePer, windSpd, windDir, swellDir, spotFacing = null
   if (!waveH || waveH < 0.3) return 0;
   let score = 0;
 
-  if      (waveH >= 3.0) score += 5;
+  if      (waveH >= 3.0) score += 3;
   else if (waveH >= 2.0) score += 4;
-  else if (waveH >= 1.5) score += 3;
+  else if (waveH >= 1.5) score += 5;
   else if (waveH >= 1.0) score += 2;
 
   if      (wavePer >= 15) score += 4;
@@ -758,6 +758,9 @@ function surfScore(waveH, wavePer, windSpd, windDir, swellDir, spotFacing = null
     else if (windSpd < 10)             score += 2;
     else if (windSpd < 20)             score += 1;
   }
+
+  // Big swell + strong onshore = dangerous closeouts, heavily penalised
+  if (waveH >= 2.5 && windSpd != null && windSpd >= 25 && !offshore) score -= 3;
 
   if (spotFacing != null && swellDir != null) {
     const diff = angleDiff(swellDir, spotFacing);
