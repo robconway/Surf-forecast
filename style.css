@@ -166,9 +166,18 @@ main { flex: 1; padding: 1.25rem 1.25rem 2.5rem; max-width: 820px; margin: 0 aut
 }
 
 /* ── Location bar ───────────────────────────────────────────────────────────── */
-.loc-bar { display: flex; align-items: baseline; gap: .75rem; margin-bottom: 1rem; flex-wrap: wrap; }
-.loc-bar h2 { font-size: 1.55rem; font-weight: 700; }
+.loc-bar { display: flex; align-items: center; gap: .75rem; margin-bottom: 1rem; flex-wrap: wrap; }
+.loc-bar h2 { font-size: 1.55rem; font-weight: 700; flex: 1 1 auto; }
 #locationCoords { font-size: .78rem; color: var(--muted); }
+.cam-btn {
+  font-size: .68rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .07em; padding: .25rem .6rem;
+  border: 1px solid var(--border); border-radius: 4px;
+  background: var(--bg2); color: var(--muted);
+  text-decoration: none; white-space: nowrap; flex-shrink: 0;
+  transition: border-color .15s, color .15s;
+}
+.cam-btn:hover { border-color: var(--accent); color: var(--text); }
 
 /* ── Model tabs ─────────────────────────────────────────────────────────────── */
 .model-tabs { display: flex; gap: .35rem; margin-top: 1rem; margin-bottom: .5rem; }
@@ -209,8 +218,7 @@ main { flex: 1; padding: 1.25rem 1.25rem 2.5rem; max-width: 820px; margin: 0 aut
 .spot-dist { font-size: .68rem; color: var(--muted); margin-left: .15rem; }
 .nearby-loading { font-size: .8rem; color: var(--muted); margin-left: .4rem; }
 
-/* ── Webcam section ─────────────────────────────────────────────────────────── */
-.webcam-section { margin-bottom: .5rem; }
+/* ── Webcam cards (shown only when Windy returns results) ────────────────── */
 .section-label {
   font-size: .65rem; text-transform: uppercase;
   letter-spacing: .1em; color: var(--muted);

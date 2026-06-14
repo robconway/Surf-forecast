@@ -150,6 +150,7 @@ const errorEl        = document.getElementById('error');
 const loadingEl      = document.getElementById('loading');
 const locationName   = document.getElementById('locationName');
 const locationCoords = document.getElementById('locationCoords');
+const camBtn         = document.getElementById('camBtn');
 const nowBanner      = document.getElementById('nowBanner');
 const nearbySpotsEl  = document.getElementById('nearbySpots');
 const suggestionsEl  = document.getElementById('suggestions');
@@ -448,8 +449,14 @@ async function reloadForecast() {
 
 // ── Master render ─────────────────────────────────────────────────────────────
 function renderAll(lat, lon, name, marine, weather) {
-  locationName.textContent   = name;
-  locationCoords.textContent = `${lat.toFixed(4)}°, ${lon.toFixed(4)}°`;
+  locationName.textContent = name;
+  // Show GPS coords only when geocoding couldn't find a place name (fallback is raw "lat, lon")
+  const hasName = name && !/^-?\d/.test(name.trim());
+  locationCoords.textContent = hasName ? '' : `${lat.toFixed(4)}°, ${lon.toFixed(4)}°`;
+  // Cam button — link to Google search for this spot's surf cams
+  const place = (name || '').split(',')[0].trim() || `${lat.toFixed(2)}, ${lon.toFixed(2)}`;
+  camBtn.href = `https://www.google.com/search?q=${encodeURIComponent(place + ' surf cam')}`;
+  camBtn.classList.remove('hidden');
 
   const mh  = marine.hourly;
   const wh  = weather.hourly;
@@ -462,7 +469,6 @@ function renderAll(lat, lon, name, marine, weather) {
   const safeNow  = nowIdx >= 0 ? nowIdx : baseIdx + now.getHours();
 
   renderNearbySpots(lat, lon);
-  renderWebcams(lat, lon, name);
   renderNowBanner(mh, wh, safeNow);
   renderForecastGrid(mh, wh, baseIdx, lat, lon);
   showApp();
