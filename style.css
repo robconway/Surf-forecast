@@ -280,6 +280,7 @@ main { flex: 1; padding: 1.25rem 1.25rem 2.5rem; max-width: 820px; margin: 0 aut
 .ns-value { font-size: 1.2rem; font-weight: 700; line-height: 1.1; }
 .ns-value small { font-size: .65rem; font-weight: 400; color: var(--muted); margin-left: .1rem; }
 .ns-dir { font-size: .7rem; color: var(--muted); }
+.now-banner .stars { font-size: .9rem; letter-spacing: .01em; }
 
 /* ── Stars ──────────────────────────────────────────────────────────────────── */
 .stars { letter-spacing: .04em; line-height: 1; }
