@@ -267,18 +267,19 @@ main { flex: 1; padding: 1.25rem 1.25rem 2.5rem; max-width: 820px; margin: 0 aut
   display: flex; align-items: stretch;
   background: var(--bg2); border: 1px solid var(--border);
   border-radius: var(--radius); margin-bottom: 1.25rem;
-  overflow: hidden; flex-wrap: wrap;
+  overflow: hidden;
 }
 .now-stat {
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
-  padding: .9rem 1.1rem; border-right: 1px solid var(--border);
-  min-width: 80px; gap: .15rem;
+  padding: .75rem .5rem; border-right: 1px solid var(--border);
+  flex: 1; gap: .1rem; min-width: 0;
 }
 .now-stat:last-child { border-right: none; }
-.ns-label { font-size: .65rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
-.ns-value { font-size: 1.35rem; font-weight: 700; line-height: 1.1; }
-.ns-value small { font-size: .7rem; font-weight: 400; color: var(--muted); margin-left: .1rem; }
+.ns-label { font-size: .6rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+.ns-value { font-size: 1.2rem; font-weight: 700; line-height: 1.1; }
+.ns-value small { font-size: .65rem; font-weight: 400; color: var(--muted); margin-left: .1rem; }
+.ns-dir { font-size: .7rem; color: var(--muted); }
 
 /* ── Stars ──────────────────────────────────────────────────────────────────── */
 .stars { letter-spacing: .04em; line-height: 1; }
@@ -440,8 +441,7 @@ footer a:hover { text-decoration: underline; }
 @media (max-width: 560px) {
   .search-bar input { font-size: .82rem; padding: .42rem .6rem; }
   #searchBtn { padding: .42rem .7rem; font-size: .8rem; }
-  .now-stat { min-width: 60px; padding: .7rem .5rem; }
-  .ns-value { font-size: 1.1rem; }
+  .ns-value { font-size: 1rem; }
   .wave-range { font-size: 1.2rem; }
   .msw-col-hdrs, .msw-row { grid-template-columns: 46px 1fr 1fr 72px; }
 }

@@ -521,10 +521,7 @@ function renderNowBanner(mh, wh, idx) {
     <div class="now-stat">
       <span class="ns-label">Wind</span>
       <span class="ns-value ${windClass(windSpd,windDir,waveDir)}">${dirArrow(windDir)} ${windSpd != null ? Math.round(windSpd) : '—'}<small>km/h</small></span>
-    </div>
-    <div class="now-stat">
-      <span class="ns-label">Direction</span>
-      <span class="ns-value">${dirArrow(waveDir)} ${dirName(waveDir)}</span>
+      <span class="ns-dir">${dirArrow(waveDir)} ${dirName(waveDir)}</span>
     </div>
   `;
 }
