@@ -1,6 +1,7 @@
 'use strict';
 
-const WINDY_KEY = 'nLTvWT2UmcDdp3GkdRiQWDFUdRR5wY19';
+const WINDY_KEY  = 'nLTvWT2UmcDdp3GkdRiQWDFUdRR5wY19';
+const SHEETS_URL = ''; // paste your Apps Script web app URL here once deployed
 
 // ── Time slots (MSW style: rows) ──────────────────────────────────────────────
 const SLOTS = [
@@ -919,8 +920,21 @@ function saveFeedback(arr) {
   localStorage.setItem(FB_KEY, JSON.stringify(arr.slice(-500)));
 }
 
+function deviceId() {
+  let id = localStorage.getItem('mlw_did');
+  if (!id) { id = crypto.randomUUID(); localStorage.setItem('mlw_did', id); }
+  return id;
+}
+
+// Blend personal bias (from local ratings) with global crowd bias (from sheet)
 function getStarBias() {
-  return parseFloat(localStorage.getItem('mlw_bias') || '0');
+  const personal = parseFloat(localStorage.getItem('mlw_bias') || '0');
+  const global   = parseFloat(localStorage.getItem('mlw_global_bias') || '0');
+  const count    = loadFeedback().length;
+  // Lean on global bias until user has enough personal ratings
+  if (count >= 10) return personal * 0.8 + global * 0.2;
+  if (count >= 3)  return personal * 0.5 + global * 0.5;
+  return global;
 }
 
 function recordFeedback(entry) {
@@ -932,6 +946,33 @@ function recordFeedback(entry) {
   // bias = mean(actual - predicted); applied in scoreToStars
   const bias = all.reduce((s, e) => s + (e.actual - e.predicted), 0) / all.length;
   localStorage.setItem('mlw_bias', bias.toFixed(3));
+  // Fire-and-forget POST to Google Sheet
+  if (SHEETS_URL) {
+    fetch(SHEETS_URL, {
+      method: 'POST',
+      body: JSON.stringify({
+        deviceId: deviceId(),
+        date: entry.date, slot: entry.slot,
+        lat: entry.lat, lon: entry.lon,
+        predicted: entry.predicted, actual: entry.actual,
+        waveH: entry.waveH ?? null, period: entry.period ?? null,
+        windSpd: entry.windSpd ?? null, offshore: entry.offshore ?? null,
+        swellDiff: entry.swellAngleDiff ?? null,
+      }),
+    }).catch(() => {});
+  }
+}
+
+// Fetch crowd bias from Google Sheet and cache it locally
+async function fetchGlobalBias() {
+  if (!SHEETS_URL) return;
+  try {
+    const res  = await fetch(SHEETS_URL);
+    const data = await res.json();
+    if (typeof data.bias === 'number' && data.count >= 5) {
+      localStorage.setItem('mlw_global_bias', data.bias.toFixed(3));
+    }
+  } catch (_) {}
 }
 
 // Event delegation: hover preview + click to rate
@@ -972,3 +1013,6 @@ document.getElementById('mswForecast').addEventListener('click', e => {
     <span class="fb-rated">${'★'.repeat(actual)}${'☆'.repeat(5 - actual)}</span>
     <span class="fb-count">${loadFeedback().length} session${loadFeedback().length === 1 ? '' : 's'} rated</span>`;
 });
+
+// Fetch crowd bias in the background on startup (updates mlw_global_bias cache)
+fetchGlobalBias();
