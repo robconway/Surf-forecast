@@ -20,9 +20,15 @@ const SURF_SPOTS = [
   { name: 'Perranporth',       lat: 50.3467, lon: -5.1503, facing: 270 },
   { name: 'Sennen Cove',       lat: 50.0703, lon: -5.6986, facing: 260 },
   { name: 'Bude',              lat: 50.8272, lon: -4.5436, facing: 270 },
-  { name: 'Croyde',            lat: 51.1236, lon: -4.2282, facing: 315 },
-  { name: 'Saunton Sands',     lat: 51.1000, lon: -4.2100, facing: 300 },
-  { name: 'Putsborough',       lat: 51.1406, lon: -4.2469, facing: 290 },
+  { name: 'Croyde',            lat: 51.1236, lon: -4.2282, facing: 315,
+    quirks: { tide: 'aroundLow', tideWindow: 2, tideBonus: 2 } },
+  { name: 'Saunton Sands',     lat: 51.1000, lon: -4.2100, facing: 300,
+    quirks: { tide: 'beforeHigh', tideWindow: 2, tideBonus: 2, tideBadHigh: true, windShelter: [315, 45] } },
+  { name: 'Putsborough',       lat: 51.1406, lon: -4.2469, facing: 290,
+    quirks: { tide: 'pushing', tideBonus: 2, tideBadHighWide: true, tideBadLow: true, tideWindow: 2, windShelter: [200, 260] } },
+  { name: 'Woolacombe',        lat: 51.1706, lon: -4.2143, facing: 280 },
+  { name: 'Coombsgate',        lat: 51.1940, lon: -4.2280, facing: 295,
+    quirks: { tide: 'aroundLow', tideWindow: 2, tideBonus: 2 } },
   { name: 'Saltburn',          lat: 54.5844, lon: -0.9728, facing:  30 },
   { name: 'Thurso East',       lat: 58.5936, lon: -3.5239, facing:  10 },
   { name: 'Tiree',             lat: 56.5000, lon: -6.9167, facing: 270 },
@@ -514,13 +520,14 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
   const phaseH        = ((lon + 180) / 360) * 12.42;
   const { hwH, lwH } = tidalParams(lat, lon, now);
 
-  // Find nearest named spot within 5 km for swell direction scoring
-  let spotFacing = null, nearestDist = Infinity;
+  // Find nearest named spot within 5 km for swell direction scoring + quirks
+  let nearestSpot = null, nearestDist = Infinity;
   for (const s of SURF_SPOTS) {
-    const d = haversine(lat, lon, s.lat, s.lon);
-    if (d < nearestDist) { nearestDist = d; spotFacing = s.facing; }
+    const dist = haversine(lat, lon, s.lat, s.lon);
+    if (dist < nearestDist) { nearestDist = dist; nearestSpot = s; }
   }
-  if (nearestDist > 5) spotFacing = null;
+  if (nearestDist > 5) nearestSpot = null;
+  const spotFacing = nearestSpot ? nearestSpot.facing : null;
 
   const existingRatings = {};
   loadFeedback().forEach(e => { existingRatings[`${e.date}|${e.slot}`] = e.actual; });
@@ -554,7 +561,9 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
       const swellPer= safeVal(mh.swell_wave_period, idx);
       const windSpd = safeVal(wh.windspeed_10m, idx);
       const windDir = safeVal(wh.winddirection_10m, idx);
-      const score   = surfScore(waveH, wavePer, windSpd, windDir, waveDir, spotFacing);
+      const absHour = d * 24 + slot.hour;
+      const rawScore = surfScore(waveH, wavePer, windSpd, windDir, waveDir, spotFacing);
+      const score   = rawScore === 0 ? 0 : rawScore + tideQuirkAdj(nearestSpot ? nearestSpot.quirks : null, phaseH, absHour, windSpd, windDir);
       const stars   = score === 0 ? 0 : scoreToStars(score);
 
       // Wave range in feet (surf height → face height)
@@ -675,6 +684,36 @@ function tidalParams(lat, lon, date) {
   const hwH = best.mhwn + (best.mhws - best.mhwn) * f;
   const lwH = best.mlwn - (best.mlwn - best.mlws) * f;
   return { hwH, lwH, amp: (hwH - lwH) / 2 };
+}
+
+// Score modifier from spot-specific tidal/wind quirks
+function tideQuirkAdj(quirks, phaseH, absHour, windSpd, windDir) {
+  if (!quirks) return 0;
+  const T = 12.4167;
+  const phaseFromHW = ((absHour - phaseH) % T + T) % T; // 0=HW, T/2=LW, T=next HW
+  const distFromHW  = Math.min(phaseFromHW, T - phaseFromHW);
+  const phaseFromLW = Math.abs(phaseFromHW - T / 2);
+  const distFromLW  = Math.min(phaseFromLW, T - phaseFromLW);
+  const isRising    = phaseFromHW > T / 2;
+  const w = quirks.tideWindow ?? 2;
+  let adj = 0;
+
+  if (quirks.tide === 'beforeHigh' && isRising && (T - phaseFromHW) <= w) adj += (quirks.tideBonus ?? 2);
+  if (quirks.tide === 'aroundLow'  && distFromLW <= w)                    adj += (quirks.tideBonus ?? 2);
+  if (quirks.tide === 'pushing'    && isRising)                            adj += (quirks.tideBonus ?? 2);
+
+  if (quirks.tideBadHigh     && distFromHW < 1) adj -= 1;
+  if (quirks.tideBadHighWide && distFromHW < 2) adj -= 1;
+  if (quirks.tideBadLow      && distFromLW < w) adj -= 2;
+
+  if (quirks.windShelter && windDir != null && windSpd > 5) {
+    const [from, to] = quirks.windShelter;
+    const sheltered = from > to
+      ? (windDir >= from || windDir <= to)
+      : (windDir >= from && windDir <= to);
+    if (sheltered) adj += 1;
+  }
+  return adj;
 }
 
 function tideEvents(phaseH, hwH, lwH, dayOff) {
