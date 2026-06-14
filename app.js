@@ -645,10 +645,10 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
                  data-lat="${lat}" data-lon="${lon}"
                  data-wh="${waveH?.toFixed(2) ?? ''}" data-per="${wavePer ?? ''}"
                  data-wsp="${windSpd ?? ''}" data-off="${offshore}" data-sdiff="${sdiff}">
-               <span class="fb-label">${fbPrompt()}</span>
                <span class="fb-stars">
                  ${[1,2,3,4,5].map(v => `<button class="fb-star" data-v="${v}">★</button>`).join('')}
                </span>
+               <span class="fb-label">${fbPrompt()}</span>
              </div>`;
       }
     }
