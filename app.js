@@ -948,8 +948,10 @@ function recordFeedback(entry) {
   localStorage.setItem('mlw_bias', bias.toFixed(3));
   // Fire-and-forget POST to Google Sheet
   if (SHEETS_URL) {
+    // mode: no-cors required for cross-origin POST to Apps Script (fire-and-forget)
     fetch(SHEETS_URL, {
       method: 'POST',
+      mode: 'no-cors',
       body: JSON.stringify({
         deviceId: deviceId(),
         date: entry.date, slot: entry.slot,
@@ -967,7 +969,7 @@ function recordFeedback(entry) {
 async function fetchGlobalBias() {
   if (!SHEETS_URL) return;
   try {
-    const res  = await fetch(SHEETS_URL);
+    const res  = await fetch(SHEETS_URL, { redirect: 'follow' });
     const data = await res.json();
     if (typeof data.bias === 'number' && data.count >= 5) {
       localStorage.setItem('mlw_global_bias', data.bias.toFixed(3));
