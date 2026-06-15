@@ -684,7 +684,7 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
   document.getElementById('mswForecast').innerHTML = html;
 }
 
-// Wave height as a feet range: lo = Hs in ft, hi = face height (~1.75× Hs)
+// Wave height as a feet range: lo = Hs in ft, hi = face height (~1.3× Hs)
 function waveRangeFt(mh, baseIdx, dayOff, centerHour, spread) {
   const vals = [];
   for (let h = Math.max(0, centerHour - spread); h <= Math.min(23, centerHour + spread); h++) {
@@ -693,8 +693,8 @@ function waveRangeFt(mh, baseIdx, dayOff, centerHour, spread) {
   }
   if (!vals.length) return null;
   const mid = vals[Math.floor(vals.length / 2)];
-  const lo  = Math.max(1, Math.round(mid * 3.281));
-  const hi  = Math.max(lo + 1, Math.round(mid * 3.281 * 1.75));
+  const lo  = Math.max(0, Math.round(mid * 3.281 * 0.85));
+  const hi  = Math.max(lo + 1, Math.round(mid * 3.281 * 1.3));
   return { lo, hi };
 }
 
