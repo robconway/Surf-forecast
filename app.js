@@ -45,9 +45,9 @@ const SURF_SPOTS = [
   { name: 'Bude',              lat: 50.8272, lon: -4.5436, facing: 270 },
   { name: 'Croyde',            lat: 51.1236, lon: -4.2282, facing: 315,
     quirks: { tide: 'aroundLow', tideWindow: 2, tideBonus: 2 } },
-  { name: 'Saunton Sands',     lat: 51.1000, lon: -4.2100, facing: 300,
+  { name: 'Saunton Sands',     lat: 51.1000, lon: -4.2100, facing: 300, exposure: 0.55,
     quirks: { tide: 'beforeHigh', tideWindow: 2, tideBonus: 2, tideBadHigh: true, windShelter: [315, 45] } },
-  { name: 'Putsborough',       lat: 51.1406, lon: -4.2469, facing: 290,
+  { name: 'Putsborough',       lat: 51.1406, lon: -4.2469, facing: 290, exposure: 0.75,
     quirks: { tide: 'pushing', tideBonus: 2, tideBadHighWide: true, tideBadLow: true, tideWindow: 2, windShelter: [200, 260] } },
   { name: 'Woolacombe',        lat: 51.1706, lon: -4.2143, facing: 280 },
   { name: 'Coombsgate',        lat: 51.1940, lon: -4.2280, facing: 295,
@@ -501,7 +501,7 @@ function renderAll(lat, lon, name, marine, weather) {
   const safeNow  = nowIdx >= 0 ? nowIdx : baseIdx + now.getHours();
 
   renderNearbySpots(lat, lon);
-  renderNowBanner(mh, wh, safeNow);
+  renderNowBanner(mh, wh, safeNow, lat, lon);
   renderForecastGrid(mh, wh, baseIdx, lat, lon);
   showApp();
 
@@ -511,12 +511,26 @@ function safeVal(arr, idx) {
   return arr && idx >= 0 && idx < arr.length ? arr[idx] : null;
 }
 
+// Find the nearest named spot within 5km, for exposure/facing/quirks lookup
+function findNearestSpot(lat, lon) {
+  let nearestSpot = null, nearestDist = Infinity;
+  for (const s of SURF_SPOTS) {
+    const dist = haversine(lat, lon, s.lat, s.lon);
+    if (dist < nearestDist) { nearestDist = dist; nearestSpot = s; }
+  }
+  return nearestDist <= 5 ? nearestSpot : null;
+}
+
 // ── Current conditions banner ─────────────────────────────────────────────────
-function renderNowBanner(mh, wh, idx) {
-  const waveH   = safeVal(mh.wave_height, idx);
+function renderNowBanner(mh, wh, idx, lat, lon) {
+  const nearestSpot = findNearestSpot(lat, lon);
+  const exposure = nearestSpot?.exposure ?? 1.0;
+  const waveHRaw = safeVal(mh.wave_height, idx);
+  const waveH   = waveHRaw != null ? waveHRaw * exposure : null;
   const wavePer = safeVal(mh.wave_period, idx);
   const waveDir = safeVal(mh.wave_direction, idx);
-  const swellH  = safeVal(mh.swell_wave_height, idx);
+  const swellHRaw = safeVal(mh.swell_wave_height, idx);
+  const swellH  = swellHRaw != null ? swellHRaw * exposure : null;
   const windSpd = safeVal(wh.windspeed_10m, idx);
   const windDir = safeVal(wh.winddirection_10m, idx);
   const stars   = surfStars(waveH, wavePer, windSpd, windDir, waveDir);
@@ -556,13 +570,9 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
   const { hwH, lwH } = tidalParams(lat, lon, now);
 
   // Find nearest named spot within 5 km for swell direction scoring + quirks
-  let nearestSpot = null, nearestDist = Infinity;
-  for (const s of SURF_SPOTS) {
-    const dist = haversine(lat, lon, s.lat, s.lon);
-    if (dist < nearestDist) { nearestDist = dist; nearestSpot = s; }
-  }
-  if (nearestDist > 5) nearestSpot = null;
+  const nearestSpot = findNearestSpot(lat, lon);
   const spotFacing = nearestSpot ? nearestSpot.facing : null;
+  const exposure = nearestSpot?.exposure ?? 1.0;
 
   const existingRatings = {};
   loadFeedback().forEach(e => { existingRatings[`${e.date}|${e.slot}`] = e.actual; });
@@ -592,10 +602,12 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
 
     for (const slot of SLOTS) {
       const idx     = baseIdx + d * 24 + slot.hour;
-      const waveH   = safeVal(mh.wave_height, idx);
+      const waveHRaw = safeVal(mh.wave_height, idx);
+      const waveH   = waveHRaw != null ? waveHRaw * exposure : null;
       const wavePer = safeVal(mh.wave_period, idx);
       const waveDir = safeVal(mh.wave_direction, idx);
-      const swellH  = safeVal(mh.swell_wave_height, idx);
+      const swellHRaw = safeVal(mh.swell_wave_height, idx);
+      const swellH  = swellHRaw != null ? swellHRaw * exposure : null;
       const swellPer= safeVal(mh.swell_wave_period, idx);
       const windSpd = safeVal(wh.windspeed_10m, idx);
       const windDir = safeVal(wh.winddirection_10m, idx);
@@ -605,7 +617,7 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
       const stars   = score === 0 ? 0 : scoreToStars(score);
 
       // Wave range in feet (surf height → face height)
-      const range   = waveRangeFt(mh, baseIdx, d, slot.hour, slot.spread);
+      const range   = waveRangeFt(mh, baseIdx, d, slot.hour, slot.spread, exposure);
       const rangeStr= range ? `${range.lo}-${range.hi}` : '—';
 
       const windKph = windSpd != null ? Math.round(windSpd) : null;
@@ -685,14 +697,14 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
 }
 
 // Wave height as a feet range: lo = Hs in ft, hi = face height (~1.3× Hs)
-function waveRangeFt(mh, baseIdx, dayOff, centerHour, spread) {
+function waveRangeFt(mh, baseIdx, dayOff, centerHour, spread, exposure = 1.0) {
   const vals = [];
   for (let h = Math.max(0, centerHour - spread); h <= Math.min(23, centerHour + spread); h++) {
     const v = safeVal(mh.wave_height, baseIdx + dayOff * 24 + h);
     if (v != null) vals.push(v);
   }
   if (!vals.length) return null;
-  const mid = vals[Math.floor(vals.length / 2)];
+  const mid = vals[Math.floor(vals.length / 2)] * exposure;
   const lo  = Math.max(0, Math.round(mid * 3.281 * 0.85));
   const hi  = Math.max(lo + 1, Math.round(mid * 3.281 * 1.3));
   return { lo, hi };
