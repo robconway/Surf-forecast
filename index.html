@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Magic Lie Weed" />
-  <link rel="stylesheet" href="style.css?v=40" />
+  <link rel="stylesheet" href="style.css?v=41" />
 </head>
 <body>
   <header>
@@ -61,7 +61,6 @@
       <div class="nearby-spots hidden" id="nearbySpots"></div>
 
       <div class="now-banner" id="nowBanner"></div>
-      <div id="buoyReadout" class="buoy-readout hidden"></div>
 
       <div id="mswForecast"></div>
 
@@ -78,6 +77,7 @@
     <div class="footer-main">
       Data: <a href="https://open-meteo.com" target="_blank">Open-Meteo</a> Marine &amp; Weather APIs · Free &amp; open source
     </div>
+    <div id="buoyReadout" class="buoy-readout hidden"></div>
     <div class="crew-row">
       <label class="crew-label" for="crewInput">👥 Crew code:</label>
       <input type="text" id="crewInput" class="crew-input" placeholder="e.g. NORTHDEVON" maxlength="12" autocomplete="off" autocapitalize="characters" />
@@ -91,6 +91,6 @@
     <button id="installDismiss" class="install-dismiss">✕</button>
   </div>
 
-  <script src="app.js?v=47"></script>
+  <script src="app.js?v=48"></script>
 </body>
 </html>
