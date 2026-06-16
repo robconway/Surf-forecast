@@ -5,7 +5,7 @@ const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbwk3M1tSBx4gVeQY218g
 const CREW_KEY   = 'mlw_crew';
 // Free key from https://coastalmonitoring.org/ccoresources/api/, Referer-locked to this domain.
 // Leave blank to disable the buoy sanity check entirely.
-const CCO_API_KEY = '';
+const CCO_API_KEY = '15a08442e69a49641285776883544efa';
 
 function getCrewCode() {
   return (localStorage.getItem(CREW_KEY) || '').toUpperCase().trim() || null;
