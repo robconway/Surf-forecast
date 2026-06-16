@@ -526,7 +526,7 @@ function renderAll(lat, lon, name, marine, weather) {
   const safeNow  = nowIdx >= 0 ? nowIdx : baseIdx + now.getHours();
 
   renderNearbySpots(lat, lon);
-  renderNowBanner(mh, wh, safeNow, lat, lon);
+  renderNowBanner(mh, wh, safeNow, lat, lon, baseIdx);
   renderForecastGrid(mh, wh, baseIdx, lat, lon);
   showApp();
 
@@ -547,20 +547,24 @@ function findNearestSpot(lat, lon) {
 }
 
 // ── Current conditions banner ─────────────────────────────────────────────────
-function renderNowBanner(mh, wh, idx, lat, lon) {
+function renderNowBanner(mh, wh, idx, lat, lon, baseIdx) {
   const nearestSpot = findNearestSpot(lat, lon);
   const exposure = nearestSpot?.exposure ?? 1.0;
+  const phaseH   = ((lon + 180) / 360) * 12.42;
+  const absHour  = idx - baseIdx;
+  const tideMult = tideHeightMultiplier(nearestSpot?.quirks, phaseH, absHour);
+  const effScale = exposure * tideMult;
   const waveHRaw = safeVal(mh.wave_height, idx);
-  const waveH   = waveHRaw != null ? waveHRaw * exposure : null;
+  const waveH   = waveHRaw != null ? waveHRaw * effScale : null;
   const wavePer = safeVal(mh.wave_period, idx);
   const waveDir = safeVal(mh.wave_direction, idx);
   const swellHRaw = safeVal(mh.swell_wave_height, idx);
-  const swellH  = swellHRaw != null ? swellHRaw * exposure : null;
+  const swellH  = swellHRaw != null ? swellHRaw * effScale : null;
   const secSwellLabel = secondarySwellLabel(
     safeVal(mh.secondary_swell_wave_height, idx),
     safeVal(mh.secondary_swell_wave_direction, idx),
     safeVal(mh.secondary_swell_wave_period, idx),
-    exposure
+    effScale
   );
   const windSpd = safeVal(wh.windspeed_10m, idx);
   const windDir = safeVal(wh.winddirection_10m, idx);
@@ -634,28 +638,30 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
 
     for (const slot of SLOTS) {
       const idx     = baseIdx + d * 24 + slot.hour;
+      const absHour = d * 24 + slot.hour;
+      const tideMult = tideHeightMultiplier(nearestSpot?.quirks, phaseH, absHour);
+      const effScale = exposure * tideMult;
       const waveHRaw = safeVal(mh.wave_height, idx);
-      const waveH   = waveHRaw != null ? waveHRaw * exposure : null;
+      const waveH   = waveHRaw != null ? waveHRaw * effScale : null;
       const wavePer = safeVal(mh.wave_period, idx);
       const waveDir = safeVal(mh.wave_direction, idx);
       const swellHRaw = safeVal(mh.swell_wave_height, idx);
-      const swellH  = swellHRaw != null ? swellHRaw * exposure : null;
+      const swellH  = swellHRaw != null ? swellHRaw * effScale : null;
       const swellPer= safeVal(mh.swell_wave_period, idx);
       const secSwellLabel = secondarySwellLabel(
         safeVal(mh.secondary_swell_wave_height, idx),
         safeVal(mh.secondary_swell_wave_direction, idx),
         safeVal(mh.secondary_swell_wave_period, idx),
-        exposure
+        effScale
       );
       const windSpd = safeVal(wh.windspeed_10m, idx);
       const windDir = safeVal(wh.winddirection_10m, idx);
-      const absHour = d * 24 + slot.hour;
       const rawScore = surfScore(waveH, wavePer, windSpd, windDir, waveDir, spotFacing);
       const score   = rawScore === 0 ? 0 : rawScore + tideQuirkAdj(nearestSpot ? nearestSpot.quirks : null, phaseH, absHour, windSpd, windDir);
       const stars   = score === 0 ? 0 : scoreToStars(score);
 
       // Wave range in feet (surf height → face height)
-      const range   = waveRangeFt(mh, baseIdx, d, slot.hour, slot.spread, exposure);
+      const range   = waveRangeFt(mh, baseIdx, d, slot.hour, slot.spread, effScale);
       const rangeStr= range ? `${range.lo}-${range.hi}` : '—';
 
       const windKph = windSpd != null ? Math.round(windSpd) : null;
@@ -803,6 +809,31 @@ function tideQuirkAdj(quirks, phaseH, absHour, windSpd, windDir) {
     if (sheltered) adj += 1;
   }
   return adj;
+}
+
+// Tidal sandbank/bathymetry effects can make a spot noticeably bigger or smaller
+// at certain points in the tide cycle (e.g. Saunton builds in the 2h before high).
+// Mirrors the same windows as tideQuirkAdj but scales displayed/scored wave height directly.
+function tideHeightMultiplier(quirks, phaseH, absHour) {
+  if (!quirks) return 1.0;
+  const T = 12.4167;
+  const phaseFromHW = ((absHour - phaseH) % T + T) % T;
+  const distFromHW  = Math.min(phaseFromHW, T - phaseFromHW);
+  const phaseFromLW = Math.abs(phaseFromHW - T / 2);
+  const distFromLW  = Math.min(phaseFromLW, T - phaseFromLW);
+  const isRising    = phaseFromHW > T / 2;
+  const w = quirks.tideWindow ?? 2;
+  let mult = 1.0;
+
+  if (quirks.tide === 'beforeHigh' && isRising && (T - phaseFromHW) <= w) mult *= 1.3;
+  if (quirks.tide === 'aroundLow'  && distFromLW <= w)                    mult *= 1.2;
+  if (quirks.tide === 'pushing'    && isRising)                            mult *= 1.15;
+
+  if (quirks.tideBadHigh     && distFromHW < 1) mult *= 0.8;
+  if (quirks.tideBadHighWide && distFromHW < 2) mult *= 0.8;
+  if (quirks.tideBadLow      && distFromLW < w) mult *= 0.7;
+
+  return mult;
 }
 
 function tideEvents(phaseH, hwH, lwH, dayOff) {
