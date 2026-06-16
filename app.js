@@ -475,7 +475,7 @@ function paintSpotButtons(nearbySpots, lat, lon) {
 
 // ── API ───────────────────────────────────────────────────────────────────────
 let currentLat = null, currentLon = null, currentName = null;
-let currentModel = 'openmeteo';
+let currentModel = localStorage.getItem('mlw_model') || 'openmeteo';
 const LAST_LOC_KEY = 'mlw_last_loc';
 
 async function loadForecast(lat, lon, name) {
@@ -1109,7 +1109,13 @@ document.getElementById('modelTabs').addEventListener('click', e => {
   document.querySelectorAll('.model-tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   currentModel = btn.dataset.model;
+  localStorage.setItem('mlw_model', currentModel);
   reloadForecast();
+});
+
+// Reflect the restored wind model in the tab UI (data is re-fetched per the active model anyway)
+document.querySelectorAll('.model-tab').forEach(b => {
+  b.classList.toggle('active', b.dataset.model === currentModel);
 });
 function showError(msg) {
   [loadingEl, appEl].forEach(el => el.classList.add('hidden'));
