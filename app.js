@@ -3,6 +3,9 @@
 const WINDY_KEY  = 'nLTvWT2UmcDdp3GkdRiQWDFUdRR5wY19';
 const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbwk3M1tSBx4gVeQY218gTTvQjNIi5SPOUbFpFRYnHHqRi1JkuTkr14NeuPb3W-pgTXXiw/exec';
 const CREW_KEY   = 'mlw_crew';
+// Free key from https://coastalmonitoring.org/ccoresources/api/, Referer-locked to this domain.
+// Leave blank to disable the buoy sanity check entirely.
+const CCO_API_KEY = '';
 
 function getCrewCode() {
   return (localStorage.getItem(CREW_KEY) || '').toUpperCase().trim() || null;
@@ -266,6 +269,30 @@ async function reverseGeocode(lat, lon) {
     if (place) return country ? `${place}, ${country}` : place;
   } catch (_) {}
   return `${lat.toFixed(3)}, ${lon.toFixed(3)}`;
+}
+
+// Silent sanity check against the real Bideford Bay wave buoy (Channel Coastal
+// Observatory, free API) — North Devon spots only. Console-only, never shown in
+// the UI; lets us spot-check exposure/tide-multiplier assumptions over time.
+const BIDEFORD_BAY_BUOY = { lat: 51.0584, lon: -4.2768, site: '97' };
+
+async function checkBuoySanity(lat, lon, nearestSpot, swellH, exposure) {
+  try {
+    if (!CCO_API_KEY) return;
+    if (haversine(lat, lon, BIDEFORD_BAY_BUOY.lat, BIDEFORD_BAY_BUOY.lon) > 15) return;
+    const res = await fetch(`https://coastalmonitoring.org/observations/waves/latest?key=${CCO_API_KEY}&site=${BIDEFORD_BAY_BUOY.site}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const feature = data?.features?.[0];
+    const buoyHs = feature?.properties?.height ?? feature?.properties?.sig_wave_height;
+    if (buoyHs == null) return;
+    console.info(
+      `[buoy check] Bideford Bay Hs=${(+buoyHs).toFixed(2)}m vs MLW swell` +
+      `${nearestSpot ? `(${nearestSpot.name})` : ''}=${swellH != null ? swellH.toFixed(2) : '—'}m (exposure=${exposure})`
+    );
+  } catch (_) {
+    // best-effort only — never affects the main forecast
+  }
 }
 
 // ── Nearest surf spots ────────────────────────────────────────────────────────
@@ -554,12 +581,12 @@ function renderNowBanner(mh, wh, idx, lat, lon, baseIdx) {
   const absHour  = idx - baseIdx;
   const tideMult = tideHeightMultiplier(nearestSpot?.quirks, phaseH, absHour);
   const effScale = exposure * tideMult;
-  const waveHRaw = safeVal(mh.wave_height, idx);
-  const waveH   = waveHRaw != null ? waveHRaw * effScale : null;
   const wavePer = safeVal(mh.wave_period, idx);
   const waveDir = safeVal(mh.wave_direction, idx);
   const swellHRaw = safeVal(mh.swell_wave_height, idx);
   const swellH  = swellHRaw != null ? swellHRaw * effScale : null;
+  // Surf height is driven by the swell component, not total Hs — see waveRangeFt()
+  const waveH   = swellH;
   const secSwellLabel = secondarySwellLabel(
     safeVal(mh.secondary_swell_wave_height, idx),
     safeVal(mh.secondary_swell_wave_direction, idx),
@@ -570,7 +597,8 @@ function renderNowBanner(mh, wh, idx, lat, lon, baseIdx) {
   const windDir = safeVal(wh.winddirection_10m, idx);
   const stars   = surfStars(waveH, wavePer, windSpd, windDir, waveDir);
 
-  const waveHFt  = waveH  != null ? Math.round(waveH  * 3.281) : null;
+  const waveRange = surfFaceHeightFt(waveH);
+  const waveRangeStr = waveRange ? `${waveRange.lo}-${waveRange.hi}` : '—';
   const swellHFt = swellH != null ? Math.round(swellH * 3.281) : null;
   nowBanner.innerHTML = `
     <div class="now-stat">
@@ -579,7 +607,7 @@ function renderNowBanner(mh, wh, idx, lat, lon, baseIdx) {
     </div>
     <div class="now-stat">
       <span class="ns-label">Waves</span>
-      <span class="ns-value ${waveClass(waveH)}">${waveHFt ?? '—'}<small>ft</small></span>
+      <span class="ns-value ${waveClass(waveH)}">${waveRangeStr}<small>ft</small></span>
     </div>
     <div class="now-stat">
       <span class="ns-label">Period</span>
@@ -596,6 +624,7 @@ function renderNowBanner(mh, wh, idx, lat, lon, baseIdx) {
       <span class="ns-dir">${dirArrow(waveDir)} ${dirName(waveDir)}</span>
     </div>
   `;
+  checkBuoySanity(lat, lon, nearestSpot, swellH, exposure);
 }
 
 // ── MSW-style forecast: days as sections, time slots as rows ─────────────────
@@ -641,12 +670,13 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
       const absHour = d * 24 + slot.hour;
       const tideMult = tideHeightMultiplier(nearestSpot?.quirks, phaseH, absHour);
       const effScale = exposure * tideMult;
-      const waveHRaw = safeVal(mh.wave_height, idx);
-      const waveH   = waveHRaw != null ? waveHRaw * effScale : null;
       const wavePer = safeVal(mh.wave_period, idx);
       const waveDir = safeVal(mh.wave_direction, idx);
       const swellHRaw = safeVal(mh.swell_wave_height, idx);
       const swellH  = swellHRaw != null ? swellHRaw * effScale : null;
+      // Surf height is driven by the swell component, not total Hs (which includes
+      // local wind chop) — keeps the SURF range consistent with the SWELL figure.
+      const waveH   = swellH;
       const swellPer= safeVal(mh.swell_wave_period, idx);
       const secSwellLabel = secondarySwellLabel(
         safeVal(mh.secondary_swell_wave_height, idx),
@@ -741,18 +771,24 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
   document.getElementById('mswForecast').innerHTML = html;
 }
 
-// Wave height as a feet range: lo = Hs in ft, hi = face height (~1.3× Hs)
+// Surf face height range in feet from a swell height in metres: lo = Hs, hi = face (~1.3× Hs)
+function surfFaceHeightFt(swellHMeters) {
+  if (swellHMeters == null) return null;
+  const lo = Math.max(0, Math.round(swellHMeters * 3.281 * 0.85));
+  const hi = Math.max(lo + 1, Math.round(swellHMeters * 3.281 * 1.3));
+  return { lo, hi };
+}
+
+// Wave height as a feet range, based on the swell component (not total Hs, which
+// includes local wind chop and would otherwise diverge from the displayed SWELL figure)
 function waveRangeFt(mh, baseIdx, dayOff, centerHour, spread, exposure = 1.0) {
   const vals = [];
   for (let h = Math.max(0, centerHour - spread); h <= Math.min(23, centerHour + spread); h++) {
-    const v = safeVal(mh.wave_height, baseIdx + dayOff * 24 + h);
+    const v = safeVal(mh.swell_wave_height, baseIdx + dayOff * 24 + h);
     if (v != null) vals.push(v);
   }
   if (!vals.length) return null;
-  const mid = vals[Math.floor(vals.length / 2)] * exposure;
-  const lo  = Math.max(0, Math.round(mid * 3.281 * 0.85));
-  const hi  = Math.max(lo + 1, Math.round(mid * 3.281 * 1.3));
-  return { lo, hi };
+  return surfFaceHeightFt(vals[Math.floor(vals.length / 2)] * exposure);
 }
 
 
