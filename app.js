@@ -178,6 +178,7 @@ const locationName   = document.getElementById('locationName');
 const locationCoords = document.getElementById('locationCoords');
 const camBtn         = document.getElementById('camBtn');
 const nowBanner      = document.getElementById('nowBanner');
+const buoyReadoutEl  = document.getElementById('buoyReadout');
 const nearbySpotsEl  = document.getElementById('nearbySpots');
 const suggestionsEl  = document.getElementById('suggestions');
 
@@ -286,10 +287,12 @@ async function checkBuoySanity(lat, lon, nearestSpot, swellH, exposure) {
     const feature = data?.features?.[0];
     const buoyHs = feature?.properties?.height ?? feature?.properties?.sig_wave_height;
     if (buoyHs == null) return;
-    console.info(
-      `[buoy check] Bideford Bay Hs=${(+buoyHs).toFixed(2)}m vs MLW swell` +
-      `${nearestSpot ? `(${nearestSpot.name})` : ''}=${swellH != null ? swellH.toFixed(2) : '—'}m (exposure=${exposure})`
-    );
+    const buoyFt = Math.round(+buoyHs * 3.281);
+    const appFt  = swellH != null ? Math.round(swellH * 3.281) : null;
+    const msg = `Bideford Bay buoy: ${buoyFt}ft (${(+buoyHs).toFixed(2)}m) · app: ${appFt ?? '—'}ft`;
+    buoyReadoutEl.textContent = msg;
+    buoyReadoutEl.classList.remove('hidden');
+    console.info('[buoy check]', msg, `(exposure=${exposure})`);
   } catch (_) {
     // best-effort only — never affects the main forecast
   }
@@ -1036,6 +1039,7 @@ function dirName(d)  { return d == null ? '' : NAMES[Math.round(d/45)%8]; }
 // ── UI state ──────────────────────────────────────────────────────────────────
 function showLoading() {
   [splash, appEl, errorEl].forEach(el => el.classList.add('hidden'));
+  buoyReadoutEl.classList.add('hidden');
   loadingEl.classList.remove('hidden');
 }
 function showApp() {
