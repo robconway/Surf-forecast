@@ -405,6 +405,7 @@ main { flex: 1; padding: 1.25rem 1.25rem 2.5rem; max-width: 820px; margin: 0 aut
 .swell-ht small { font-size: .65rem; font-weight: 400; color: var(--muted); }
 .swell-meta { font-size: .74rem; color: var(--muted); margin-top: .1rem; }
 .swell-deg  { font-size: .7rem; }
+.swell-secondary { font-size: .68rem; color: var(--muted); font-style: italic; margin-top: .05rem; }
 
 /* WIND cell */
 .msw-wind { padding: 0 .3rem; text-align: center; }

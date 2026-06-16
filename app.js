@@ -465,16 +465,41 @@ async function reloadForecast() {
                     : currentModel === 'ecmwf' ? '&models=ecmwf_ifs025'
                     : '';
     const vars = 'wave_height,wave_period,wave_direction,swell_wave_height,swell_wave_period';
-    const [mRes, wRes] = await Promise.all([
+    const secVars = 'secondary_swell_wave_height,secondary_swell_wave_direction,secondary_swell_wave_period';
+    const [mRes, wRes, sRes] = await Promise.all([
       fetch(`https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}&hourly=${vars}&timezone=auto&forecast_days=7`),
       fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=windspeed_10m,winddirection_10m&timezone=auto&forecast_days=7${windModel}`),
+      fetch(`https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}&hourly=${secVars}&models=meteofrance_wave&timezone=auto&forecast_days=7`).catch(() => null),
     ]);
     if (!mRes.ok) throw new Error('Marine API error — this location may be inland or unsupported.');
     if (!wRes.ok) throw new Error('Weather API error.');
     [marine, weather] = await Promise.all([mRes.json(), wRes.json()]);
+    await mergeSecondarySwell(marine.hourly, sRes);
     renderAll(lat, lon, name, marine, weather);
   } catch (err) {
     showError(`Failed to load forecast: ${err.message}`);
+  }
+}
+
+// Secondary swell (a second, distinct swell train) is only available from the
+// MeteoFrance wave model, fetched separately so its absence/failure never
+// blocks the main forecast.
+async function mergeSecondarySwell(mh, sRes) {
+  try {
+    if (!sRes || !sRes.ok) return;
+    const sec = await sRes.json();
+    const sh = sec.hourly;
+    if (!sh || !sh.time) return;
+    const idxByTime = {};
+    sh.time.forEach((t, i) => { idxByTime[t] = i; });
+    for (const key of ['secondary_swell_wave_height', 'secondary_swell_wave_direction', 'secondary_swell_wave_period']) {
+      mh[key] = mh.time.map(t => {
+        const i = idxByTime[t];
+        return i != null ? sh[key][i] : null;
+      });
+    }
+  } catch (_) {
+    // secondary swell is supplementary — ignore failures
   }
 }
 
@@ -531,6 +556,12 @@ function renderNowBanner(mh, wh, idx, lat, lon) {
   const waveDir = safeVal(mh.wave_direction, idx);
   const swellHRaw = safeVal(mh.swell_wave_height, idx);
   const swellH  = swellHRaw != null ? swellHRaw * exposure : null;
+  const secSwellLabel = secondarySwellLabel(
+    safeVal(mh.secondary_swell_wave_height, idx),
+    safeVal(mh.secondary_swell_wave_direction, idx),
+    safeVal(mh.secondary_swell_wave_period, idx),
+    exposure
+  );
   const windSpd = safeVal(wh.windspeed_10m, idx);
   const windDir = safeVal(wh.winddirection_10m, idx);
   const stars   = surfStars(waveH, wavePer, windSpd, windDir, waveDir);
@@ -553,6 +584,7 @@ function renderNowBanner(mh, wh, idx, lat, lon) {
     <div class="now-stat">
       <span class="ns-label">Swell</span>
       <span class="ns-value">${swellHFt ?? '—'}<small>ft</small></span>
+      ${secSwellLabel ? `<span class="ns-dir">${secSwellLabel}</span>` : ''}
     </div>
     <div class="now-stat">
       <span class="ns-label">Wind</span>
@@ -609,6 +641,12 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
       const swellHRaw = safeVal(mh.swell_wave_height, idx);
       const swellH  = swellHRaw != null ? swellHRaw * exposure : null;
       const swellPer= safeVal(mh.swell_wave_period, idx);
+      const secSwellLabel = secondarySwellLabel(
+        safeVal(mh.secondary_swell_wave_height, idx),
+        safeVal(mh.secondary_swell_wave_direction, idx),
+        safeVal(mh.secondary_swell_wave_period, idx),
+        exposure
+      );
       const windSpd = safeVal(wh.windspeed_10m, idx);
       const windDir = safeVal(wh.winddirection_10m, idx);
       const absHour = d * 24 + slot.hour;
@@ -644,6 +682,7 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
             &nbsp;<span style="color:var(--muted);font-size:.8rem">${fmt(swellPerDisp,0)}s</span>
           </div>
           <div class="swell-meta">${dirArrow(waveDir)} ${dirName(waveDir)}<span class="swell-deg">${waveDir != null ? ' '+Math.round(waveDir)+'°' : ''}</span></div>
+          ${secSwellLabel ? `<div class="swell-secondary">${secSwellLabel}</div>` : ''}
         </div>
         <div class="msw-wind">
           <div class="wind-mph">${windKph ?? '—'}<small>km/h</small></div>
@@ -914,6 +953,15 @@ function fmt(v, dec) {
 const ARROWS = ['↑','↗','→','↘','↓','↙','←','↖'];
 const NAMES  = ['N','NE','E','SE','S','SW','W','NW'];
 function dirArrow(d) { return d == null ? '—' : ARROWS[Math.round(d/45)%8]; }
+
+// Build a "+2ft SW 11s" label for a secondary swell train, or null if absent/too small to matter
+function secondarySwellLabel(secHRaw, secDir, secPer, exposure) {
+  if (secHRaw == null) return null;
+  const secH = secHRaw * exposure;
+  if (secH < 0.3) return null;
+  const ft = Math.round(secH * 3.281);
+  return `+${ft}ft ${dirName(secDir)} ${fmt(secPer, 0)}s`;
+}
 function dirName(d)  { return d == null ? '' : NAMES[Math.round(d/45)%8]; }
 
 // ── UI state ──────────────────────────────────────────────────────────────────
