@@ -476,9 +476,11 @@ function paintSpotButtons(nearbySpots, lat, lon) {
 // ── API ───────────────────────────────────────────────────────────────────────
 let currentLat = null, currentLon = null, currentName = null;
 let currentModel = 'openmeteo';
+const LAST_LOC_KEY = 'mlw_last_loc';
 
 async function loadForecast(lat, lon, name) {
   currentLat = lat; currentLon = lon; currentName = name;
+  localStorage.setItem(LAST_LOC_KEY, JSON.stringify({ lat, lon, name }));
   await reloadForecast();
 }
 
@@ -1236,3 +1238,13 @@ document.getElementById('mswForecast').addEventListener('click', e => {
 
 // Fetch crowd bias in the background on startup (updates mlw_global_bias cache)
 fetchGlobalBias();
+
+// Reopen the last-viewed location automatically instead of showing the splash screen
+(function restoreLastLocation() {
+  try {
+    const last = JSON.parse(localStorage.getItem(LAST_LOC_KEY) || 'null');
+    if (last && typeof last.lat === 'number' && typeof last.lon === 'number') {
+      loadForecast(last.lat, last.lon, last.name);
+    }
+  } catch (_) {}
+})();
