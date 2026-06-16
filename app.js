@@ -275,26 +275,40 @@ async function reverseGeocode(lat, lon) {
 // Silent sanity check against the real Bideford Bay wave buoy (Channel Coastal
 // Observatory, free API) — North Devon spots only. Console-only, never shown in
 // the UI; lets us spot-check exposure/tide-multiplier assumptions over time.
-const BIDEFORD_BAY_BUOY = { lat: 51.0584, lon: -4.2768, site: '97' };
+const BIDEFORD_BAY_BUOY = { lat: 51.0584, lon: -4.2768 };
 
 async function checkBuoySanity(lat, lon, nearestSpot, swellH, exposure) {
   try {
     if (!CCO_API_KEY) return;
     if (haversine(lat, lon, BIDEFORD_BAY_BUOY.lat, BIDEFORD_BAY_BUOY.lon) > 15) return;
-    const res = await fetch(`https://coastalmonitoring.org/observations/waves/latest?key=${CCO_API_KEY}&site=${BIDEFORD_BAY_BUOY.site}`);
-    if (!res.ok) return;
+    // Fetch all latest wave observations and find Bideford Bay by name
+    const res = await fetch(`https://coastalmonitoring.org/observations/waves/latest.geojson?key=${CCO_API_KEY}`);
+    if (!res.ok) {
+      console.warn('[buoy check] CCO API returned', res.status);
+      return;
+    }
     const data = await res.json();
-    const feature = data?.features?.[0];
-    const buoyHs = feature?.properties?.height ?? feature?.properties?.sig_wave_height;
-    if (buoyHs == null) return;
+    const feature = data?.features?.find(f => /bideford/i.test(
+      f.properties?.site_name ?? f.properties?.name ?? f.properties?.label ?? ''
+    ));
+    // Log first feature's keys on first load so we can fix field names if needed
+    if (data?.features?.length && !feature) {
+      console.warn('[buoy check] Bideford not found. Available sites:', data.features.map(f => f.properties?.site_name ?? f.properties?.name ?? JSON.stringify(Object.keys(f.properties ?? {}))));
+    }
+    const props = feature?.properties ?? {};
+    const buoyHs = props.height ?? props.sig_wave_height ?? props.Hm0 ?? props.hs ?? props.wave_height;
+    if (buoyHs == null) {
+      if (feature) console.warn('[buoy check] Bideford found but no Hs field. Keys:', Object.keys(props));
+      return;
+    }
     const buoyFt = Math.round(+buoyHs * 3.281);
     const appFt  = swellH != null ? Math.round(swellH * 3.281) : null;
     const msg = `Bideford Bay buoy: ${buoyFt}ft (${(+buoyHs).toFixed(2)}m) · app: ${appFt ?? '—'}ft`;
     buoyReadoutEl.textContent = msg;
     buoyReadoutEl.classList.remove('hidden');
     console.info('[buoy check]', msg, `(exposure=${exposure})`);
-  } catch (_) {
-    // best-effort only — never affects the main forecast
+  } catch (err) {
+    console.warn('[buoy check] failed:', err.message);
   }
 }
 
