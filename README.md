@@ -1,6 +1,6 @@
 # Magic Lie Weed 🏄
 
-Built fir a bit of fun. A surf forecast progressive web app for North Devon and beyond, built with plain HTML/CSS/JS and deployed on GitHub Pages.
+Built for a bit of fun. A surf forecast progressive web app for North Devon and beyond, built with plain HTML/CSS/JS and deployed on GitHub Pages.
 
 **Live app:** https://robconway.github.io/surf-forecast/
 
