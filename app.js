@@ -46,15 +46,23 @@ const SURF_SPOTS = [
   { name: 'Perranporth',       lat: 50.3467, lon: -5.1503, facing: 270 },
   { name: 'Sennen Cove',       lat: 50.0703, lon: -5.6986, facing: 260 },
   { name: 'Bude',              lat: 50.8272, lon: -4.5436, facing: 270 },
-  { name: 'Croyde',            lat: 51.1236, lon: -4.2282, facing: 315,
+  { name: 'Croyde',            lat: 51.1236, lon: -4.2282, facing: 270,
+    offshore: [45, 135], closesOut: 2.3, ability: 'intermediate-advanced',
     quirks: { tide: 'aroundLow', tideWindow: 2, tideBonus: 2 } },
-  { name: 'Saunton Sands',     lat: 51.1000, lon: -4.2100, facing: 300, exposure: 0.55,
+  { name: 'Saunton Sands',     lat: 51.1000, lon: -4.2100, facing: 292, exposure: 0.55,
+    offshore: [45, 135], closesOut: 1.9, ability: 'beginner-intermediate',
     quirks: { tide: 'beforeHigh', tideWindow: 2, tideBonus: 2, tideBadHigh: true, windShelter: [315, 45] } },
-  { name: 'Putsborough',       lat: 51.1406, lon: -4.2469, facing: 290, exposure: 0.75,
+  { name: 'Putsborough',       lat: 51.1406, lon: -4.2469, facing: 270, exposure: 0.75,
+    offshore: [45, 135], closesOut: 1.2, ability: 'beginner-longboard',
     quirks: { tide: 'pushing', tideBonus: 2, tideBadHighWide: true, tideBadLow: true, tideWindow: 2, windShelter: [200, 260] } },
-  { name: 'Woolacombe',        lat: 51.1706, lon: -4.2143, facing: 280 },
+  { name: 'Woolacombe',        lat: 51.1706, lon: -4.2143, facing: 280,
+    offshore: [45, 135], closesOut: 1.2, ability: 'beginner-intermediate' },
   { name: 'Coombsgate',        lat: 51.1940, lon: -4.2280, facing: 295,
     quirks: { tide: 'aroundLow', tideWindow: 2, tideBonus: 2 } },
+  { name: 'Lynmouth',          lat: 51.229,  lon: -3.834,  facing: 292,
+    offshore: [135, 225], closesOut: 2.3, ability: 'advanced' },
+  { name: 'Westward Ho!',      lat: 51.049,  lon: -4.231,  facing: 292,
+    offshore: [90, 180],  closesOut: 1.0, ability: 'beginner' },
   { name: 'Saltburn',          lat: 54.5844, lon: -0.9728, facing:  30 },
   { name: 'Thurso East',       lat: 58.5936, lon: -3.5239, facing:  10 },
   { name: 'Tiree',             lat: 56.5000, lon: -6.9167, facing: 270 },
@@ -601,7 +609,9 @@ function renderNowBanner(mh, wh, idx, lat, lon, baseIdx) {
   );
   const windSpd = safeVal(wh.windspeed_10m, idx);
   const windDir = safeVal(wh.winddirection_10m, idx);
-  const stars   = surfStars(waveH, wavePer, windSpd, windDir, waveDir);
+  const offshoreRange = nearestSpot?.offshore ?? null;
+  const closesOut     = nearestSpot?.closesOut ?? null;
+  const stars   = surfStars(waveH, wavePer, windSpd, windDir, waveDir, nearestSpot?.facing ?? null, offshoreRange, closesOut);
 
   const waveRange = surfFaceHeightFt(waveH);
   const waveRangeStr = waveRange ? `${waveRange.lo}-${waveRange.hi}` : '—';
@@ -626,7 +636,7 @@ function renderNowBanner(mh, wh, idx, lat, lon, baseIdx) {
     </div>
     <div class="now-stat">
       <span class="ns-label">Wind</span>
-      <span class="ns-value ${windClass(windSpd,windDir,waveDir)}">${dirArrow(windDir)} ${windSpd != null ? Math.round(windSpd) : '—'}<small>km/h</small></span>
+      <span class="ns-value ${windClass(windSpd,windDir,waveDir,offshoreRange)}">${dirArrow(windDir)} ${windSpd != null ? Math.round(windSpd) : '—'}<small>km/h</small></span>
       <span class="ns-dir">${dirArrow(waveDir)} ${dirName(waveDir)}</span>
     </div>
   `;
@@ -692,7 +702,9 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
       );
       const windSpd = safeVal(wh.windspeed_10m, idx);
       const windDir = safeVal(wh.winddirection_10m, idx);
-      const rawScore = surfScore(waveH, wavePer, windSpd, windDir, waveDir, spotFacing);
+      const offshoreRange = nearestSpot?.offshore ?? null;
+      const closesOut     = nearestSpot?.closesOut ?? null;
+      const rawScore = surfScore(waveH, wavePer, windSpd, windDir, waveDir, spotFacing, offshoreRange, closesOut);
       const score   = rawScore === 0 ? 0 : rawScore + tideQuirkAdj(nearestSpot ? nearestSpot.quirks : null, phaseH, absHour, windSpd, windDir);
       const stars   = score === 0 ? 0 : scoreToStars(score);
 
@@ -701,7 +713,7 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
       const rangeStr= range ? `${range.lo}-${range.hi}` : '—';
 
       const windKph = windSpd != null ? Math.round(windSpd) : null;
-      const wc      = windClass(windSpd, windDir, waveDir);
+      const wc      = windClass(windSpd, windDir, waveDir, offshoreRange);
       const badge   = wc === 'wind-off' ? 'badge-off' : wc === 'wind-cross' ? 'badge-cross' : 'badge-on';
 
       // Swell in feet
@@ -937,8 +949,18 @@ function fmtH(h) {
 }
 
 // ── Surf star rating (0–5) ────────────────────────────────────────────────────
-function surfScore(waveH, wavePer, windSpd, windDir, swellDir, spotFacing = null) {
+function isOffshore(windDir, swellDir, offshoreRange) {
+  if (windDir == null) return false;
+  if (offshoreRange) {
+    const [from, to] = offshoreRange;
+    return from <= to ? (windDir >= from && windDir <= to) : (windDir >= from || windDir <= to);
+  }
+  return swellDir != null && angleDiff(windDir, (swellDir + 180) % 360) < 50;
+}
+
+function surfScore(waveH, wavePer, windSpd, windDir, swellDir, spotFacing = null, offshoreRange = null, closesOut = null) {
   if (!waveH || waveH < 0.3) return 0;
+  if (closesOut != null && waveH > closesOut) return 0;
   let score = 0;
 
   if      (waveH >= 3.0) score += 3;
@@ -951,8 +973,7 @@ function surfScore(waveH, wavePer, windSpd, windDir, swellDir, spotFacing = null
   else if (wavePer >= 9)  score += 2;
   else if (wavePer >= 6)  score += 1;
 
-  const offshore = windDir != null && swellDir != null &&
-    angleDiff(windDir, (swellDir + 180) % 360) < 50;
+  const offshore = isOffshore(windDir, swellDir, offshoreRange);
   if (windSpd != null) {
     if      (windSpd < 10 && offshore) score += 4;
     else if (windSpd < 15 && offshore) score += 3;
@@ -983,8 +1004,8 @@ function scoreToStars(score) {
   return 1;
 }
 
-function surfStars(waveH, wavePer, windSpd, windDir, swellDir, spotFacing = null) {
-  const score = surfScore(waveH, wavePer, windSpd, windDir, swellDir, spotFacing);
+function surfStars(waveH, wavePer, windSpd, windDir, swellDir, spotFacing = null, offshoreRange = null, closesOut = null) {
+  const score = surfScore(waveH, wavePer, windSpd, windDir, swellDir, spotFacing, offshoreRange, closesOut);
   return score === 0 ? 0 : scoreToStars(score);
 }
 
@@ -1005,9 +1026,18 @@ function waveClass(h) {
   return 'wh-huge';
 }
 
-function windClass(spd, dir, waveDir) {
+function windClass(spd, dir, waveDir, offshoreRange = null) {
   if (dir == null || spd == null) return '';
   if (spd > 35) return 'wind-on';
+  if (offshoreRange) {
+    const [from, to] = offshoreRange;
+    const off = from <= to ? (dir >= from && dir <= to) : (dir >= from || dir <= to);
+    const midOff = from <= to ? (from + to) / 2 : ((from + to + 360) / 2) % 360;
+    const d = angleDiff(dir, midOff);
+    if (off || d < 50)  return 'wind-off';
+    if (d < 100) return 'wind-cross';
+    return 'wind-on';
+  }
   if (waveDir != null) {
     const d = angleDiff(dir, (waveDir + 180) % 360);
     if (d < 50)  return 'wind-off';
