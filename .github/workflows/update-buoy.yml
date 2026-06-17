@@ -17,7 +17,7 @@ jobs:
         run: |
           curl -sf \
             -H "Referer: https://robconway.github.io/" \
-            "https://coastalmonitoring.org/observations/waves/latest.geojson?key=15a08442e69a49641285776883544efa" \
+            "https://coastalmonitoring.org/observations/waves/latest.geojson?key=01eb4cef4d2081defb985705e8450ef8" \
             -o /tmp/cco.json \
             || echo '{"features":[]}' > /tmp/cco.json
 
