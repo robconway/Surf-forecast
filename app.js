@@ -282,7 +282,9 @@ async function checkBuoySanity(lat, lon, nearestSpot, swellH, exposure) {
     if (!CCO_API_KEY) return;
     if (haversine(lat, lon, BIDEFORD_BAY_BUOY.lat, BIDEFORD_BAY_BUOY.lon) > 15) return;
     // Fetch all latest wave observations and find Bideford Bay by name
-    const res = await fetch(`https://coastalmonitoring.org/observations/waves/latest.geojson?key=${CCO_API_KEY}`);
+    // CCO API doesn't allow direct browser fetches (CORS), so proxy through corsproxy.io
+    const ccoUrl = `https://coastalmonitoring.org/observations/waves/latest.geojson?key=${CCO_API_KEY}`;
+    const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(ccoUrl)}`);
     if (!res.ok) {
       console.warn('[buoy check] CCO API returned', res.status);
       return;
