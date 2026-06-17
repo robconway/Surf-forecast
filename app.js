@@ -727,7 +727,7 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
           ${secSwellLabel ? `<div class="swell-secondary">${secSwellLabel}</div>` : ''}
         </div>
         <div class="msw-wind">
-          <div class="wind-mph">${windKph ?? '—'}<small>km/h</small></div>
+          <div class="wind-mph">${dirArrow(windDir)} ${windKph ?? '—'}<small>km/h</small></div>
           <div class="wind-badge ${badge}">${dirName(windDir) || '—'}</div>
         </div>
       </div>`;
