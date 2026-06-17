@@ -288,7 +288,9 @@ async function checkBuoySanity(lat, lon, nearestSpot, swellH, exposure) {
     if (buoyHs == null) return;
     const buoyFt = Math.round(buoyHs * 3.281);
     const appFt  = swellH != null ? Math.round(swellH * 3.281) : null;
-    const msg = `Bideford Bay buoy: ${buoyFt}ft (${buoyHs.toFixed(2)}m) · app: ${appFt ?? '—'}ft`;
+    const tpStr  = data.tp  != null ? ` · ${Math.round(data.tp)}s` : '';
+    const dirStr = data.dir != null ? ` · ${dirName(data.dir)}` : '';
+    const msg = `Bideford Bay buoy: ${buoyFt}ft${tpStr}${dirStr} · app: ${appFt ?? '—'}ft`;
     buoyReadoutEl.textContent = msg;
     buoyReadoutEl.classList.remove('hidden');
     console.info('[buoy check]', msg, `(exposure=${exposure})`);

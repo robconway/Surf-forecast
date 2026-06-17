@@ -21,28 +21,22 @@ jobs:
             -o /tmp/cco.json \
             || echo '{"features":[]}' > /tmp/cco.json
 
-          echo "=== CCO debug ==="
-          echo "Feature count: $(jq '.features | length' /tmp/cco.json)"
-          echo "First feature props: $(jq -c '.features[0].properties // {}' /tmp/cco.json)"
-          echo "Bideford match: $(jq -c '[.features[] | select(.properties | to_entries | map(.value | tostring | ascii_downcase) | any(contains("bideford"))) | .properties] | first // "NOT FOUND"' /tmp/cco.json)"
-          echo "Station-97 match: $(jq -c '[.features[] | select(.properties | to_entries | map(.value | tostring) | any(. == "97")) | .properties] | first // "NOT FOUND"' /tmp/cco.json)"
-          echo "=================="
-
-          HS=$(jq -r '
+          BUOY=$(jq -c '
             [ .features[]
               | select( .properties | to_entries
                   | map(.value | tostring | ascii_downcase)
                   | any(contains("bideford")) )
               | .properties
-              | (.Hs // .hs // .height // .sig_wave_height // .Hm0
-                 // .wave_height // .significant_wave_height
-                 // .significantWaveHeight // .Significant_Wave_Height)
             ] | first // null
           ' /tmp/cco.json)
 
+          HS=$(echo  "$BUOY" | jq -r '.hs   // null')
+          TP=$(echo  "$BUOY" | jq -r '.tp   // null')
+          DIR=$(echo "$BUOY" | jq -r '.pdir // null')
+
           UPDATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          echo "{\"hs\": $HS, \"updated\": \"$UPDATED\"}" > buoy.json
-          echo "Bideford Bay Hs=${HS}m at ${UPDATED}"
+          echo "{\"hs\": $HS, \"tp\": $TP, \"dir\": $DIR, \"updated\": \"$UPDATED\"}" > buoy.json
+          echo "Bideford Bay Hs=${HS}m Tp=${TP}s Dir=${DIR}deg at ${UPDATED}"
 
       - name: Commit if changed
         run: |
