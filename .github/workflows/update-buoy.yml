@@ -16,7 +16,7 @@ jobs:
       - name: Fetch CCO buoy data and write buoy.json
         run: |
           curl -sf \
-            -H "Referer: https://www.robconway.github.io/" \
+            -H "Referer: https://robconway.github.io/" \
             "https://coastalmonitoring.org/observations/waves/latest.geojson?key=15a08442e69a49641285776883544efa" \
             -o /tmp/cco.json \
             || echo '{"features":[]}' > /tmp/cco.json
