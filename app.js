@@ -279,33 +279,16 @@ const BIDEFORD_BAY_BUOY = { lat: 51.0584, lon: -4.2768 };
 
 async function checkBuoySanity(lat, lon, nearestSpot, swellH, exposure) {
   try {
-    if (!CCO_API_KEY) return;
     if (haversine(lat, lon, BIDEFORD_BAY_BUOY.lat, BIDEFORD_BAY_BUOY.lon) > 15) return;
-    // Fetch all latest wave observations and find Bideford Bay by name
-    // CCO API doesn't allow direct browser fetches (CORS), so proxy through corsproxy.io
-    const ccoUrl = `https://coastalmonitoring.org/observations/waves/latest.geojson?key=${CCO_API_KEY}`;
-    const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(ccoUrl)}`);
-    if (!res.ok) {
-      console.warn('[buoy check] CCO API returned', res.status);
-      return;
-    }
+    // buoy.json is written every 30 min by a GitHub Actions workflow — same origin, no CORS
+    const res = await fetch('./buoy.json?t=' + Math.floor(Date.now() / 1800000));
+    if (!res.ok) return;
     const data = await res.json();
-    const feature = data?.features?.find(f => /bideford/i.test(
-      f.properties?.site_name ?? f.properties?.name ?? f.properties?.label ?? ''
-    ));
-    // Log first feature's keys on first load so we can fix field names if needed
-    if (data?.features?.length && !feature) {
-      console.warn('[buoy check] Bideford not found. Available sites:', data.features.map(f => f.properties?.site_name ?? f.properties?.name ?? JSON.stringify(Object.keys(f.properties ?? {}))));
-    }
-    const props = feature?.properties ?? {};
-    const buoyHs = props.height ?? props.sig_wave_height ?? props.Hm0 ?? props.hs ?? props.wave_height;
-    if (buoyHs == null) {
-      if (feature) console.warn('[buoy check] Bideford found but no Hs field. Keys:', Object.keys(props));
-      return;
-    }
-    const buoyFt = Math.round(+buoyHs * 3.281);
+    const buoyHs = data.hs;
+    if (buoyHs == null) return;
+    const buoyFt = Math.round(buoyHs * 3.281);
     const appFt  = swellH != null ? Math.round(swellH * 3.281) : null;
-    const msg = `Bideford Bay buoy: ${buoyFt}ft (${(+buoyHs).toFixed(2)}m) · app: ${appFt ?? '—'}ft`;
+    const msg = `Bideford Bay buoy: ${buoyFt}ft (${buoyHs.toFixed(2)}m) · app: ${appFt ?? '—'}ft`;
     buoyReadoutEl.textContent = msg;
     buoyReadoutEl.classList.remove('hidden');
     console.info('[buoy check]', msg, `(exposure=${exposure})`);
