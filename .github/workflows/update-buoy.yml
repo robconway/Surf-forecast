@@ -21,13 +21,22 @@ jobs:
             -o /tmp/cco.json \
             || echo '{"features":[]}' > /tmp/cco.json
 
+          echo "=== CCO debug ==="
+          echo "Feature count: $(jq '.features | length' /tmp/cco.json)"
+          echo "First feature props: $(jq -c '.features[0].properties // {}' /tmp/cco.json)"
+          echo "Bideford match: $(jq -c '[.features[] | select(.properties | to_entries | map(.value | tostring | ascii_downcase) | any(contains("bideford"))) | .properties] | first // "NOT FOUND"' /tmp/cco.json)"
+          echo "Station-97 match: $(jq -c '[.features[] | select(.properties | to_entries | map(.value | tostring) | any(. == "97")) | .properties] | first // "NOT FOUND"' /tmp/cco.json)"
+          echo "=================="
+
           HS=$(jq -r '
             [ .features[]
               | select( .properties | to_entries
                   | map(.value | tostring | ascii_downcase)
                   | any(contains("bideford")) )
               | .properties
-              | (.height // .sig_wave_height // .Hm0 // .hs // .wave_height)
+              | (.Hs // .hs // .height // .sig_wave_height // .Hm0
+                 // .wave_height // .significant_wave_height
+                 // .significantWaveHeight // .Significant_Wave_Height)
             ] | first // null
           ' /tmp/cco.json)
 
