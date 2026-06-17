@@ -49,7 +49,7 @@ const SURF_SPOTS = [
   { name: 'Croyde',            lat: 51.1236, lon: -4.2282, facing: 270,
     offshore: [45, 135], closesOut: 2.3, ability: 'intermediate-advanced', reliability: 4,
     quirks: { tide: 'aroundLow', tideWindow: 2, tideBonus: 2 } },
-  { name: 'Croyde Reef',       lat: 51.125,  lon: -4.242,  facing: 270,
+  { name: 'Croyde Reef',       lat: 51.125,  lon: -4.242,  facing: 270, hidden: true,
     offshore: [45, 135], closesOut: 2.8, ability: 'advanced', reliability: 3,
     notes: 'Holds bigger swell than the beach',
     quirks: { tide: 'aroundLow', tideWindow: 2, tideBonus: 2 } },
@@ -336,6 +336,7 @@ function haversine(lat1, lon1, lat2, lon2) {
 
 function nearestSpots(lat, lon, n = 3) {
   return SURF_SPOTS
+    .filter(s => !s.hidden)
     .map(s => ({ ...s, dist: haversine(lat, lon, s.lat, s.lon) }))
     .sort((a, b) => a.dist - b.dist)
     .slice(0, n);
@@ -439,7 +440,7 @@ function renderNearbySpots(lat, lon) {
 
 function mergeAndPaint(lat, lon, osmSpots) {
   // Combine OSM results with the hardcoded list, ranked by distance
-  const all = [...osmSpots, ...SURF_SPOTS]
+  const all = [...osmSpots, ...SURF_SPOTS.filter(s => !s.hidden)]
     .map(s => ({ ...s, dist: haversine(lat, lon, s.lat, s.lon) }))
     .sort((a, b) => a.dist - b.dist);
 
@@ -598,6 +599,7 @@ function safeVal(arr, idx) {
 function findNearestSpot(lat, lon) {
   let nearestSpot = null, nearestDist = Infinity;
   for (const s of SURF_SPOTS) {
+    if (s.hidden) continue;
     const dist = haversine(lat, lon, s.lat, s.lon);
     if (dist < nearestDist) { nearestDist = dist; nearestSpot = s; }
   }
