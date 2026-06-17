@@ -8,50 +8,36 @@ on:
 jobs:
   update:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
-      - name: Fetch CCO buoy data and extract Bideford Bay
+      - name: Fetch CCO buoy data and write buoy.json
         run: |
-          curl -sf "https://coastalmonitoring.org/observations/waves/latest.geojson?key=15a08442e69a49641285776883544efa" \
+          curl -sf \
             -H "Referer: https://robconway.github.io/" \
-            -o /tmp/cco.json || echo '{"features":[]}' > /tmp/cco.json
+            "https://coastalmonitoring.org/observations/waves/latest.geojson?key=15a08442e69a49641285776883544efa" \
+            -o /tmp/cco.json \
+            || echo '{"features":[]}' > /tmp/cco.json
 
-          python3 << 'EOF'
-          import json, datetime
+          HS=$(jq -r '
+            [ .features[]
+              | select( .properties | to_entries
+                  | map(.value | tostring | ascii_downcase)
+                  | any(contains("bideford")) )
+              | .properties
+              | (.height // .sig_wave_height // .Hm0 // .hs // .wave_height)
+            ] | first // null
+          ' /tmp/cco.json)
 
-          with open('/tmp/cco.json') as f:
-              data = json.load(f)
-
-          bideford = next(
-              (f for f in data.get('features', [])
-               if 'bideford' in json.dumps(f.get('properties', {})).lower()),
-              None
-          )
-
-          result = {'hs': None, 'updated': datetime.datetime.utcnow().isoformat() + 'Z', 'raw': None}
-
-          if bideford:
-              p = bideford.get('properties', {})
-              result['raw'] = p
-              # Try common field names for significant wave height (Hs)
-              for key in ('height', 'sig_wave_height', 'Hm0', 'hs', 'wave_height', 'Hs'):
-                  if key in p and p[key] is not None:
-                      try:
-                          result['hs'] = float(p[key])
-                          break
-                      except (TypeError, ValueError):
-                          pass
-
-          with open('buoy.json', 'w') as f:
-              json.dump(result, f)
-
-          print(f"Bideford Bay Hs={result['hs']}m  (raw keys: {list(p.keys()) if bideford else 'not found'})")
-          EOF
+          UPDATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          echo "{\"hs\": $HS, \"updated\": \"$UPDATED\"}" > buoy.json
+          echo "Bideford Bay Hs=${HS}m at ${UPDATED}"
 
       - name: Commit if changed
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add buoy.json
-          git diff --staged --quiet || git commit -m "chore: update buoy data" && git push
+          git diff --staged --quiet || (git commit -m "chore: update buoy data [skip ci]" && git push)
