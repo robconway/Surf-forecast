@@ -46,7 +46,7 @@ const SURF_SPOTS = [
   { name: 'Perranporth',       lat: 50.3467, lon: -5.1503, facing: 270 },
   { name: 'Sennen Cove',       lat: 50.0703, lon: -5.6986, facing: 260 },
   { name: 'Bude',              lat: 50.8272, lon: -4.5436, facing: 270 },
-  { name: 'Croyde',            lat: 51.1236, lon: -4.2282, facing: 270,
+  { name: 'Croyde',            lat: 51.1236, lon: -4.2282, facing: 270, noFoil: true,
     offshore: [45, 135], closesOut: 2.3, ability: 'intermediate-advanced', reliability: 4,
     quirks: { tide: 'aroundLow', tideWindow: 2, tideBonus: 2 } },
   { name: 'Croyde Reef',       lat: 51.125,  lon: -4.242,  facing: 270, hidden: true,
@@ -505,7 +505,9 @@ function paintSpotButtons(nearbySpots, lat, lon) {
 
 // ── API ───────────────────────────────────────────────────────────────────────
 let currentLat = null, currentLon = null, currentName = null;
-let currentModel = localStorage.getItem('mlw_model') || 'openmeteo';
+let currentModel    = localStorage.getItem('mlw_model')    || 'openmeteo';
+let currentActivity = localStorage.getItem('mlw_activity') || 'surf';
+let cachedRenderArgs = null;
 const LAST_LOC_KEY = 'mlw_last_loc';
 
 async function loadForecast(lat, lon, name) {
@@ -565,6 +567,7 @@ async function mergeSecondarySwell(mh, sRes) {
 
 // ── Master render ─────────────────────────────────────────────────────────────
 function renderAll(lat, lon, name, marine, weather) {
+  cachedRenderArgs = { lat, lon, name, marine, weather };
   locationName.textContent = name;
   // Show GPS coords only when geocoding couldn't find a place name (fallback is raw "lat, lon")
   const hasName = name && !/^-?\d/.test(name.trim());
@@ -630,7 +633,9 @@ function renderNowBanner(mh, wh, idx, lat, lon, baseIdx) {
   const windDir = safeVal(wh.winddirection_10m, idx);
   const offshoreRange = nearestSpot?.offshore ?? null;
   const closesOut     = nearestSpot?.closesOut ?? null;
-  const stars   = surfStars(waveH, wavePer, windSpd, windDir, waveDir, nearestSpot?.facing ?? null, offshoreRange, closesOut);
+  const stars = currentActivity === 'foil'
+    ? (nearestSpot?.noFoil ? 0 : foilStars(waveH, wavePer, windSpd, windDir, waveDir, nearestSpot?.facing ?? null, offshoreRange))
+    : surfStars(waveH, wavePer, windSpd, windDir, waveDir, nearestSpot?.facing ?? null, offshoreRange, closesOut);
 
   const waveRange = surfFaceHeightFt(waveH);
   const waveRangeStr = waveRange ? `${waveRange.lo}-${waveRange.hi}` : '—';
@@ -697,7 +702,7 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
         <span class="msw-day-date">${dateStr}</span>
       </div>
       <div class="msw-col-hdrs">
-        <span></span><span>SURF</span><span>SWELL</span><span>WIND</span>
+        <span></span><span>${currentActivity === 'foil' ? 'FOIL' : 'SURF'}</span><span>SWELL</span><span>WIND</span>
       </div>`;
 
     for (const slot of SLOTS) {
@@ -723,7 +728,12 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
       const windDir = safeVal(wh.winddirection_10m, idx);
       const offshoreRange = nearestSpot?.offshore ?? null;
       const closesOut     = nearestSpot?.closesOut ?? null;
-      const rawScore = surfScore(waveH, wavePer, windSpd, windDir, waveDir, spotFacing, offshoreRange, closesOut);
+      let rawScore;
+      if (currentActivity === 'foil') {
+        rawScore = nearestSpot?.noFoil ? 0 : foilScore(waveH, wavePer, windSpd, windDir, waveDir, spotFacing, offshoreRange);
+      } else {
+        rawScore = surfScore(waveH, wavePer, windSpd, windDir, waveDir, spotFacing, offshoreRange, closesOut);
+      }
       const score   = rawScore === 0 ? 0 : rawScore + tideQuirkAdj(nearestSpot ? nearestSpot.quirks : null, phaseH, absHour, windSpd, windDir);
       const stars   = score === 0 ? 0 : scoreToStars(score);
 
@@ -1028,6 +1038,46 @@ function surfStars(waveH, wavePer, windSpd, windDir, swellDir, spotFacing = null
   return score === 0 ? 0 : scoreToStars(score);
 }
 
+function foilScore(waveH, wavePer, windSpd, windDir, swellDir, spotFacing = null, offshoreRange = null) {
+  if (!waveH || waveH < 0.2) return 0;
+  let score = 0;
+
+  if      (waveH >= 2.5) score += 2;
+  else if (waveH >= 1.5) score += 3;
+  else if (waveH >= 0.8) score += 5;
+  else if (waveH >= 0.5) score += 4;
+  else if (waveH >= 0.2) score += 2;
+
+  if      (wavePer >= 15) score += 5;
+  else if (wavePer >= 12) score += 4;
+  else if (wavePer >= 9)  score += 2;
+  else if (wavePer >= 6)  score += 1;
+
+  const offshore = isOffshore(windDir, swellDir, offshoreRange);
+  if (windSpd != null) {
+    if      (windSpd < 10 && offshore) score += 4;
+    else if (windSpd < 20 && offshore) score += 3;
+    else if (windSpd < 10)             score += 3;
+    else if (windSpd < 20)             score += 2;
+    else if (windSpd < 25)             score += 1;
+    else score -= 2;
+  }
+
+  if (spotFacing != null && swellDir != null) {
+    const diff = angleDiff(swellDir, spotFacing);
+    if      (diff <= 30) score += 2;
+    else if (diff <= 60) score += 1;
+    else if (diff >  90) score -= 1;
+  }
+
+  return score;
+}
+
+function foilStars(waveH, wavePer, windSpd, windDir, swellDir, spotFacing = null, offshoreRange = null) {
+  const score = foilScore(waveH, wavePer, windSpd, windDir, swellDir, spotFacing, offshoreRange);
+  return score === 0 ? 0 : scoreToStars(score);
+}
+
 function angleDiff(a, b) {
   let d = ((a - b) + 360) % 360;
   return d > 180 ? 360 - d : d;
@@ -1096,6 +1146,7 @@ function showApp() {
   [loadingEl, errorEl, splash].forEach(el => el.classList.add('hidden'));
   appEl.classList.remove('hidden');
   document.getElementById('modelTabs').classList.remove('hidden');
+  document.getElementById('activityTabs').classList.remove('hidden');
   setTimeout(showInstallBanner, 4000);
 }
 
@@ -1170,6 +1221,24 @@ document.getElementById('modelTabs').addEventListener('click', e => {
 // Reflect the restored wind model in the tab UI (data is re-fetched per the active model anyway)
 document.querySelectorAll('.model-tab').forEach(b => {
   b.classList.toggle('active', b.dataset.model === currentModel);
+});
+
+// Activity tab switching (surf vs foil)
+document.getElementById('activityTabs').addEventListener('click', e => {
+  const btn = e.target.closest('.activity-tab');
+  if (!btn || btn.classList.contains('active')) return;
+  currentActivity = btn.dataset.activity;
+  localStorage.setItem('mlw_activity', currentActivity);
+  document.querySelectorAll('.activity-tab').forEach(b => b.classList.toggle('active', b === btn));
+  if (cachedRenderArgs) {
+    const { lat, lon, name, marine, weather } = cachedRenderArgs;
+    renderAll(lat, lon, name, marine, weather);
+  }
+});
+
+// Reflect restored activity in tab UI
+document.querySelectorAll('.activity-tab').forEach(b => {
+  b.classList.toggle('active', b.dataset.activity === currentActivity);
 });
 function showError(msg) {
   [loadingEl, appEl].forEach(el => el.classList.add('hidden'));

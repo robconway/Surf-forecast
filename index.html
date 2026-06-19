@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Magic Lie Weed" />
-  <link rel="stylesheet" href="style.css?v=41" />
+  <link rel="stylesheet" href="style.css?v=42" />
 </head>
 <body>
   <header>
@@ -64,6 +64,11 @@
 
       <div id="mswForecast"></div>
 
+      <div class="activity-tabs hidden" id="activityTabs">
+        <button class="activity-tab active" data-activity="surf">🏄 Surf</button>
+        <button class="activity-tab" data-activity="foil">🪁 Foil</button>
+      </div>
+
       <div class="model-tabs hidden" id="modelTabs">
         <button class="model-tab active" data-model="openmeteo">Best Match</button>
         <button class="model-tab" data-model="gfs">GFS Wind</button>
@@ -91,6 +96,6 @@
     <button id="installDismiss" class="install-dismiss">✕</button>
   </div>
 
-  <script src="app.js?v=57"></script>
+  <script src="app.js?v=58"></script>
 </body>
 </html>
