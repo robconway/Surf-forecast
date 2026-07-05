@@ -1005,9 +1005,24 @@ function resolvedTideEvents(lat, lon, dayOff) {
     const d = haversine(lat, lon, n.lat, n.lon);
     if (d < bestDist) { bestDist = d; best = n; }
   }
-  // Only use the fetched station if it's within 200 km (keeps international spots
-  // on the m2phase model where we have no fetched data).
-  if (!best || bestDist > 200 || !Array.isArray(best.extremes)) return null;
+  // 300 km threshold keeps international spots on the m2phase fallback while
+  // giving good coverage for Irish spots (e.g. Inch Beach is ~280 km from
+  // the Bundoran node).
+  if (!best || bestDist > 300 || !Array.isArray(best.extremes)) return null;
+
+  // Stormglass heights are in metres relative to MSL.  Convert to approximate
+  // Chart Datum by adding the nearest tidal node's mean sea level above CD,
+  // estimated as (MHWN + MLWN) / 2 — gives heights that match tide-table
+  // convention (positive, comparable to the TIDAL_NODES datums).
+  let mslOffset = 0;
+  {
+    let nearNode = TIDAL_NODES[0], nearDist = Infinity;
+    for (const n of TIDAL_NODES) {
+      const d = haversine(lat, lon, n.lat, n.lon);
+      if (d < nearDist) { nearDist = d; nearNode = n; }
+    }
+    mslOffset = (nearNode.mhwn + nearNode.mlwn) / 2;
+  }
 
   // Build local-time window for the requested day (midnight → next midnight).
   const ref      = new Date();
@@ -1021,12 +1036,13 @@ function resolvedTideEvents(lat, lon, dayOff) {
       return ms >= dayStart.getTime() && ms < dayEnd.getTime();
     })
     .map(e => {
-      const dt   = new Date(e.time);
-      const hour = dt.getHours() + dt.getMinutes() / 60;
+      const dt     = new Date(e.time);
+      const hour   = dt.getHours() + dt.getMinutes() / 60;
+      const htCD   = Math.max(0, e.height + mslOffset); // Chart Datum height, always ≥ 0
       return {
         type:   e.type === 'High' ? 'H' : 'L',
         hour,
-        height: e.height.toFixed(1),
+        height: htCD.toFixed(1),
         time:   fmtH(hour),
       };
     })
