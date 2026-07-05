@@ -519,6 +519,26 @@ let currentLat = null, currentLon = null, currentName = null;
 let currentModel    = localStorage.getItem('mlw_model')    || 'openmeteo';
 let currentActivity = localStorage.getItem('mlw_activity') || 'surf';
 let cachedRenderArgs = null;
+
+// Tide data fetched from tides.json (written daily by a GitHub Actions workflow
+// using the WorldTides API).  null until the file is loaded; falls back to the
+// m2phase tidal model when unavailable.
+let tideData = null;
+
+async function loadTideData() {
+  try {
+    // Cache-bust once per day so the browser always gets the day's fresh file.
+    const res = await fetch('./tides.json?t=' + Math.floor(Date.now() / 86400000));
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data && Array.isArray(data.nodes) && data.nodes.length > 0) {
+      tideData = data;
+      console.info('[tides] loaded', data.nodes.length, 'stations, updated', data.updated);
+    }
+  } catch (err) {
+    console.warn('[tides] could not load tides.json:', err.message);
+  }
+}
 const LAST_LOC_KEY = 'mlw_last_loc';
 
 async function loadForecast(lat, lon, name) {
@@ -809,10 +829,26 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
       }
     }
 
-    // Tide strip at the bottom of each day
-    const events = tideEvents(phaseH, hwH, lwH, d);
+    // Tide strip at the bottom of each day.
+    // Prefer real API data from tides.json; fall back to the m2phase model.
+    const liveEvents = resolvedTideEvents(lat, lon, d);
+    const events     = liveEvents ?? tideEvents(phaseH, hwH, lwH, d);
+
+    // When real events are available, derive phaseH for the SVG curve from the
+    // actual first HW of that day so the curve aligns with the displayed times.
+    let svgPhaseH = phaseH, svgDayOff = d, svgHwH = hwH, svgLwH = lwH;
+    if (liveEvents) {
+      const firstHW = liveEvents.find(e => e.type === 'H');
+      if (firstHW) { svgPhaseH = firstHW.hour; svgDayOff = 0; }
+      // Use the day's actual heights for the SVG amplitude when both are present
+      const hwEvt = liveEvents.filter(e => e.type === 'H');
+      const lwEvt = liveEvents.filter(e => e.type === 'L');
+      if (hwEvt.length) svgHwH = Math.max(...hwEvt.map(e => parseFloat(e.height)));
+      if (lwEvt.length) svgLwH = Math.min(...lwEvt.map(e => parseFloat(e.height)));
+    }
+
     html += `<div class="day-tide-strip">
-      ${tideSVG(phaseH, hwH, lwH, d, d === 0 ? now : null, 340, 44)}
+      ${tideSVG(svgPhaseH, svgHwH, svgLwH, svgDayOff, d === 0 ? now : null, 340, 44)}
       <div class="day-tide-events">
         ${events.map(e => `
           <span class="dte ${e.type === 'H' ? 'dte-hw' : 'dte-lw'}">
@@ -954,6 +990,48 @@ function tideEvents(phaseH, hwH, lwH, dayOff) {
     }
   }
   return events.sort((a, b) => a.hour - b.hour).map(e => ({ ...e, time: fmtH(e.hour) }));
+}
+
+// Returns HW/LW events for a given calendar day from the WorldTides-fetched data
+// (tides.json).  dayOff: 0 = today, 1 = tomorrow, …  Returns the same
+// {type, hour, height, time} shape as tideEvents(), or null when no data is
+// available for this location/day (so callers can fall back to tideEvents()).
+function resolvedTideEvents(lat, lon, dayOff) {
+  if (!tideData || !Array.isArray(tideData.nodes) || !tideData.nodes.length) return null;
+
+  // Find the nearest fetched station (same haversine approach as TIDAL_NODES)
+  let best = null, bestDist = Infinity;
+  for (const n of tideData.nodes) {
+    const d = haversine(lat, lon, n.lat, n.lon);
+    if (d < bestDist) { bestDist = d; best = n; }
+  }
+  // Only use the fetched station if it's within 200 km (keeps international spots
+  // on the m2phase model where we have no fetched data).
+  if (!best || bestDist > 200 || !Array.isArray(best.extremes)) return null;
+
+  // Build local-time window for the requested day (midnight → next midnight).
+  const ref      = new Date();
+  const dayStart = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() + dayOff);
+  const dayEnd   = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() + dayOff + 1);
+
+  const events = best.extremes
+    .filter(e => {
+      const ms = e.dt * 1000;
+      return ms >= dayStart.getTime() && ms < dayEnd.getTime();
+    })
+    .map(e => {
+      const dt   = new Date(e.dt * 1000);
+      const hour = dt.getHours() + dt.getMinutes() / 60;
+      return {
+        type:   e.type === 'High' ? 'H' : 'L',
+        hour,
+        height: e.height.toFixed(1),
+        time:   fmtH(hour),
+      };
+    })
+    .sort((a, b) => a.hour - b.hour);
+
+  return events.length > 0 ? events : null;
 }
 
 // nowDate is passed only for today so we can draw the "current" white dot
@@ -1387,6 +1465,10 @@ document.getElementById('mswForecast').addEventListener('click', e => {
 
 // Fetch crowd bias in the background on startup (updates mlw_global_bias cache)
 fetchGlobalBias();
+
+// Load WorldTides-fetched tide predictions (tides.json) once at startup so
+// they are available when the first forecast renders.
+loadTideData();
 
 // Reopen the last-viewed location automatically instead of showing the splash screen
 (function restoreLastLocation() {

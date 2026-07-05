@@ -1,0 +1,96 @@
+name: Update tide data
+
+on:
+  schedule:
+    # Run daily at 05:30 UTC so fresh 7-day predictions are ready each morning
+    - cron: '30 5 * * *'
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch tide extremes from WorldTides API
+        env:
+          WORLDTIDES_KEY: ${{ secrets.WORLDTIDES_KEY }}
+        run: |
+          set -euo pipefail
+
+          TODAY=$(date -u +%Y-%m-%d)
+
+          # UK/Ireland tidal reference nodes — must match TIDAL_NODES in app.js.
+          # Fetch 7 days of high/low tide extremes for each.
+          # Each request costs 1 WorldTides credit (1 credit = up to 7 days).
+          NODES=(
+            "51.21,-4.11"   # Ilfracombe / N Devon
+            "51.45,-3.18"   # Cardiff / Bristol Channel
+            "50.83,-4.54"   # Bude
+            "50.41,-5.08"   # Newquay
+            "50.35,-5.15"   # Perranporth
+            "50.57,-4.87"   # Polzeath / Padstow
+            "50.07,-5.70"   # Sennen / Land's End
+            "54.58,-0.97"   # Saltburn
+            "58.59,-3.52"   # Thurso
+            "56.50,-6.92"   # Tiree
+            "55.20,-6.66"   # Portrush
+            "54.48,-8.28"   # Bundoran
+            "52.93,-9.34"   # Lahinch
+            "52.14,-9.94"   # Inch Beach
+          )
+
+          NODES_JSON="[]"
+          OK=0; FAIL=0
+
+          for node in "${NODES[@]}"; do
+            lat="${node%%,*}"
+            lon="${node##*,}"
+            echo "Fetching lat=$lat lon=$lon …"
+
+            resp=$(curl -sf --max-time 15 \
+              "https://www.worldtides.info/api/v3?extremes&lat=${lat}&lon=${lon}&days=7&date=${TODAY}&key=${WORLDTIDES_KEY}" \
+              || echo '{"status":0}')
+
+            status=$(echo "$resp" | jq -r '.status // 0')
+
+            if [ "$status" = "200" ]; then
+              extremes=$(echo "$resp" | jq -c \
+                '[.extremes[] | {dt: .dt, type: .type, height: (.height * 100 | round / 100)}]')
+              node_obj=$(jq -n \
+                --argjson lat  "$lat" \
+                --argjson lon  "$lon" \
+                --argjson extr "$extremes" \
+                '{lat: $lat, lon: $lon, extremes: $extr}')
+              NODES_JSON=$(echo "$NODES_JSON" | jq -c --argjson n "$node_obj" '. + [$n]')
+              count=$(echo "$extremes" | jq 'length')
+              echo "  ✓ $count events"
+              OK=$((OK + 1))
+            else
+              echo "  ✗ status=$status (skipped)"
+              FAIL=$((FAIL + 1))
+            fi
+          done
+
+          UPDATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          jq -n \
+            --arg     updated "$UPDATED" \
+            --argjson nodes   "$NODES_JSON" \
+            '{updated: $updated, nodes: $nodes}' > tides.json
+
+          echo "Done — $OK nodes OK, $FAIL failed. Updated: $UPDATED"
+
+      - name: Commit if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add tides.json
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: update tide predictions [skip ci]"
+            git pull --rebase origin ${{ github.ref_name }}
+            git push
+          fi
