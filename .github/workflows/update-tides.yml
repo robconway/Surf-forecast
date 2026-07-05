@@ -1,0 +1,101 @@
+name: Update tide data
+
+on:
+  schedule:
+    # Run on the 1st and 15th of every month at 05:30 UTC.
+    # Each run fetches 16 days of data, so one run always overlaps the next —
+    # if a run fails, the previous data stays valid for the full 16-day window.
+    # 2 runs/month × 10 nodes = 20 Stormglass requests/month (free tier: 10/day).
+    - cron: '30 5 1,15 * *'
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch tide extremes from Stormglass API
+        env:
+          STORMGLASS_KEY: ${{ secrets.STORMGLASS_KEY }}
+        run: |
+          set -euo pipefail
+
+          START=$(date -u +%s)
+          END=$((START + 16 * 86400))   # 16 days per call
+
+          # 10 UK/Ireland tidal reference nodes.  Fetching 16 days per node in a
+          # single call keeps usage to 10 requests per run, well within the free
+          # tier's 10/day limit.  Perranporth, Tiree, Lahinch and Inch Beach are
+          # omitted; the app falls back to their nearest neighbour automatically.
+          NODES=(
+            "51.21,-4.11"   # Ilfracombe / N Devon
+            "51.45,-3.18"   # Cardiff / Bristol Channel
+            "50.83,-4.54"   # Bude
+            "50.41,-5.08"   # Newquay  (also covers Perranporth)
+            "50.57,-4.87"   # Polzeath / Padstow
+            "50.07,-5.70"   # Sennen / Land's End
+            "54.58,-0.97"   # Saltburn
+            "58.59,-3.52"   # Thurso
+            "55.20,-6.66"   # Portrush  (also covers Tiree via fallback)
+            "54.48,-8.28"   # Bundoran  (also covers Lahinch & Inch Beach)
+          )
+
+          NODES_JSON="[]"
+          OK=0; FAIL=0
+
+          for node in "${NODES[@]}"; do
+            lat="${node%%,*}"
+            lon="${node##*,}"
+            echo "Fetching lat=$lat lon=$lon …"
+
+            resp=$(curl -sf --max-time 15 \
+              -H "Authorization: ${STORMGLASS_KEY}" \
+              "https://api.stormglass.io/v2/tide/extremes/point?lat=${lat}&lng=${lon}&start=${START}&end=${END}" \
+              || echo '{}')
+
+            count=$(echo "$resp" | jq -r '(.data // []) | length')
+
+            if [ "$count" -gt 0 ] 2>/dev/null; then
+              extremes=$(echo "$resp" | jq -c \
+                '[.data[] | {
+                   time: .time,
+                   type: (if .type == "high" then "High" else "Low" end),
+                   height: (.height * 100 | round / 100)
+                 }]')
+              node_obj=$(jq -n \
+                --argjson lat  "$lat" \
+                --argjson lon  "$lon" \
+                --argjson extr "$extremes" \
+                '{lat: $lat, lon: $lon, extremes: $extr}')
+              NODES_JSON=$(echo "$NODES_JSON" | jq -c --argjson n "$node_obj" '. + [$n]')
+              echo "  ✓ $count events"
+              OK=$((OK + 1))
+            else
+              echo "  ✗ no data ($(echo "$resp" | jq -r '.errors // "unknown error"'))"
+              FAIL=$((FAIL + 1))
+            fi
+          done
+
+          UPDATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          jq -n \
+            --arg     updated "$UPDATED" \
+            --argjson nodes   "$NODES_JSON" \
+            '{updated: $updated, nodes: $nodes}' > tides.json
+
+          echo "Done — $OK nodes OK, $FAIL failed. Updated: $UPDATED"
+
+      - name: Commit if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add tides.json
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: update tide predictions [skip ci]"
+            git pull --rebase origin ${{ github.ref_name }}
+            git push
+          fi
