@@ -2,9 +2,11 @@ name: Update tide data
 
 on:
   schedule:
-    # Run daily at 05:30 UTC so fresh 7-day predictions are ready each morning.
-    # Stormglass free tier = 10 requests/day — we fetch exactly 10 UK/Ireland nodes.
-    - cron: '30 5 * * *'
+    # Run on the 1st and 15th of every month at 05:30 UTC.
+    # Each run fetches 16 days of data, so one run always overlaps the next —
+    # if a run fails, the previous data stays valid for the full 16-day window.
+    # 2 runs/month × 10 nodes = 20 Stormglass requests/month (free tier: 10/day).
+    - cron: '30 5 1,15 * *'
   workflow_dispatch:
 
 jobs:
@@ -22,12 +24,12 @@ jobs:
           set -euo pipefail
 
           START=$(date -u +%s)
-          END=$((START + 7 * 86400))
+          END=$((START + 16 * 86400))   # 16 days per call
 
-          # 10 UK/Ireland tidal reference nodes — fits exactly within the free
-          # 10-request/day Stormglass limit.  Perranporth, Tiree, Lahinch and
-          # Inch Beach are omitted; the app falls back to their nearest neighbour
-          # here (Newquay, Portrush, Bundoran, Bundoran respectively).
+          # 10 UK/Ireland tidal reference nodes.  Fetching 16 days per node in a
+          # single call keeps usage to 10 requests per run, well within the free
+          # tier's 10/day limit.  Perranporth, Tiree, Lahinch and Inch Beach are
+          # omitted; the app falls back to their nearest neighbour automatically.
           NODES=(
             "51.21,-4.11"   # Ilfracombe / N Devon
             "51.45,-3.18"   # Cardiff / Bristol Channel
