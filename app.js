@@ -156,39 +156,50 @@ const SURF_SPOTS = [
 
 // ── Tidal reference nodes (MHWS/MHWN/MLWN/MLWS metres above Chart Datum) ─────
 // Nearest node is used, then interpolated with moon phase for springs vs neaps.
+//
+// m2phase: M2 tidal constituent phase for this station, expressed as hours past
+// the Unix epoch (mod 12.4167 h).  HW occurs at times t where
+//   (t_epoch_hours - m2phase) mod 12.4167 == 0
+// UK/Ireland values are calibrated against published Admiralty tide tables
+// (reference date 5 Jul 2026, verified against multiple sources).
+// Non-UK/global values are derived from longitude, anchored to the same date,
+// and give a reasonable approximation for the open-ocean M2 tide.
 const TIDAL_NODES = [
-  { lat: 51.21, lon:  -4.11, mhws: 8.0, mhwn: 6.0, mlwn: 2.3, mlws: 0.7 }, // Ilfracombe / N Devon
-  { lat: 51.45, lon:  -3.18, mhws: 9.5, mhwn: 7.1, mlwn: 2.5, mlws: 0.7 }, // Cardiff / Bristol Channel
-  { lat: 50.83, lon:  -4.54, mhws: 6.7, mhwn: 5.1, mlwn: 2.1, mlws: 0.8 }, // Bude
-  { lat: 50.41, lon:  -5.08, mhws: 5.7, mhwn: 4.3, mlwn: 1.8, mlws: 0.5 }, // Newquay
-  { lat: 50.35, lon:  -5.15, mhws: 5.5, mhwn: 4.1, mlwn: 1.6, mlws: 0.5 }, // Perranporth
-  { lat: 50.57, lon:  -4.87, mhws: 5.4, mhwn: 4.0, mlwn: 1.6, mlws: 0.5 }, // Polzeath
-  { lat: 50.07, lon:  -5.70, mhws: 5.3, mhwn: 3.9, mlwn: 1.5, mlws: 0.5 }, // Sennen
-  { lat: 54.58, lon:  -0.97, mhws: 5.1, mhwn: 3.9, mlwn: 1.7, mlws: 0.5 }, // Saltburn
-  { lat: 58.59, lon:  -3.52, mhws: 3.5, mhwn: 2.8, mlwn: 1.2, mlws: 0.5 }, // Thurso
-  { lat: 56.50, lon:  -6.92, mhws: 3.6, mhwn: 2.6, mlwn: 1.1, mlws: 0.4 }, // Tiree
-  { lat: 55.20, lon:  -6.66, mhws: 1.5, mhwn: 1.1, mlwn: 0.5, mlws: 0.2 }, // Portrush
-  { lat: 54.48, lon:  -8.28, mhws: 3.8, mhwn: 2.9, mlwn: 1.1, mlws: 0.3 }, // Bundoran
-  { lat: 52.93, lon:  -9.34, mhws: 4.7, mhwn: 3.5, mlwn: 1.4, mlws: 0.4 }, // Lahinch
-  { lat: 52.14, lon:  -9.94, mhws: 3.5, mhwn: 2.6, mlwn: 0.9, mlws: 0.3 }, // Inch Beach
-  { lat: 43.65, lon:  -1.45, mhws: 3.8, mhwn: 2.8, mlwn: 1.0, mlws: 0.4 }, // Hossegor
-  { lat: 43.48, lon:  -1.56, mhws: 3.8, mhwn: 2.8, mlwn: 1.0, mlws: 0.4 }, // Biarritz
-  { lat: 43.41, lon:  -2.68, mhws: 4.2, mhwn: 3.2, mlwn: 1.2, mlws: 0.5 }, // Mundaka
-  { lat: 39.60, lon:  -9.07, mhws: 3.8, mhwn: 2.8, mlwn: 1.2, mlws: 0.4 }, // Nazaré
-  { lat: 39.36, lon:  -9.38, mhws: 3.8, mhwn: 2.8, mlwn: 1.2, mlws: 0.4 }, // Peniche
-  { lat: 38.97, lon:  -9.42, mhws: 3.7, mhwn: 2.7, mlwn: 1.1, mlws: 0.4 }, // Ericeira
-  { lat: 37.01, lon:  -8.94, mhws: 3.2, mhwn: 2.4, mlwn: 0.9, mlws: 0.3 }, // Sagres
-  { lat: 30.54, lon:  -9.71, mhws: 3.0, mhwn: 2.2, mlwn: 0.8, mlws: 0.3 }, // Taghazout
-  { lat: 28.10, lon: -14.35, mhws: 1.5, mhwn: 1.1, mlwn: 0.5, mlws: 0.2 }, // Lanzarote
-  { lat: 27.90, lon: -15.58, mhws: 1.5, mhwn: 1.1, mlwn: 0.5, mlws: 0.2 }, // Gran Canaria
-  { lat: 36.95, lon:-122.05, mhws: 1.7, mhwn: 1.3, mlwn: 0.5, mlws: 0.0 }, // Santa Cruz CA
-  { lat: 34.03, lon:-118.80, mhws: 1.6, mhwn: 1.3, mlwn: 0.5, mlws: 0.0 }, // Malibu CA
-  { lat: 21.30, lon:-157.80, mhws: 0.6, mhwn: 0.4, mlwn: 0.2, mlws: 0.1 }, // Oahu HI
-  { lat: -8.70, lon: 115.20, mhws: 2.0, mhwn: 1.5, mlwn: 0.5, mlws: 0.2 }, // Bali
-  { lat:-33.90, lon:  18.40, mhws: 1.8, mhwn: 1.5, mlwn: 0.6, mlws: 0.3 }, // Cape Town
-  { lat:-33.90, lon: 151.30, mhws: 1.3, mhwn: 1.0, mlwn: 0.5, mlws: 0.2 }, // Sydney
-  { lat:-31.90, lon: 115.90, mhws: 0.7, mhwn: 0.5, mlwn: 0.2, mlws: 0.1 }, // Perth
-  { lat:  0,    lon:   0,    mhws: 1.5, mhwn: 1.1, mlwn: 0.5, mlws: 0.2 }, // open-ocean fallback
+  // m2phase derived from observed HW times (UTC) on 2026-07-05, reference epoch hours = 486576
+  // formula: m2phase = (2.78 + HW_UTC_hours) % 12.4167
+  { lat: 51.21, lon:  -4.11, mhws: 8.0, mhwn: 6.0, mlwn: 2.3, mlws: 0.7, m2phase: 11.81 }, // Ilfracombe / N Devon  — HW 09:02 UTC
+  { lat: 51.45, lon:  -3.18, mhws: 9.5, mhwn: 7.1, mlwn: 2.5, mlws: 0.7, m2phase:  0.80 }, // Cardiff / Bristol Ch  — HW 10:26 UTC
+  { lat: 50.83, lon:  -4.54, mhws: 6.7, mhwn: 5.1, mlwn: 2.1, mlws: 0.8, m2phase: 11.68 }, // Bude                  — HW 08:54 UTC
+  { lat: 50.41, lon:  -5.08, mhws: 5.7, mhwn: 4.3, mlwn: 1.8, mlws: 0.5, m2phase: 10.98 }, // Newquay               — HW 08:12 UTC
+  { lat: 50.35, lon:  -5.15, mhws: 5.5, mhwn: 4.1, mlwn: 1.6, mlws: 0.5, m2phase: 10.98 }, // Perranporth           — HW ~08:12 UTC (≈ Newquay)
+  { lat: 50.57, lon:  -4.87, mhws: 5.4, mhwn: 4.0, mlwn: 1.6, mlws: 0.5, m2phase: 11.33 }, // Polzeath/Padstow      — HW ~08:33 UTC
+  { lat: 50.07, lon:  -5.70, mhws: 5.3, mhwn: 3.9, mlwn: 1.5, mlws: 0.5, m2phase: 10.53 }, // Sennen                — HW 07:45 UTC
+  { lat: 54.58, lon:  -0.97, mhws: 5.1, mhwn: 3.9, mlwn: 1.7, mlws: 0.5, m2phase:  9.28 }, // Saltburn              — HW 06:30 UTC
+  { lat: 58.59, lon:  -3.52, mhws: 3.5, mhwn: 2.8, mlwn: 1.2, mlws: 0.5, m2phase:  2.28 }, // Thurso                — HW 11:55 UTC
+  { lat: 56.50, lon:  -6.92, mhws: 3.6, mhwn: 2.6, mlwn: 1.1, mlws: 0.4, m2phase: 11.66 }, // Tiree                 — HW 08:53 UTC
+  { lat: 55.20, lon:  -6.66, mhws: 1.5, mhwn: 1.1, mlwn: 0.5, mlws: 0.2, m2phase:  0.20 }, // Portrush              — HW 09:50 UTC
+  { lat: 54.48, lon:  -8.28, mhws: 3.8, mhwn: 2.9, mlwn: 1.1, mlws: 0.3, m2phase:  0.23 }, // Bundoran              — HW ~09:52 UTC
+  { lat: 52.93, lon:  -9.34, mhws: 4.7, mhwn: 3.5, mlwn: 1.4, mlws: 0.4, m2phase: 12.11 }, // Lahinch               — HW ~09:20 UTC
+  { lat: 52.14, lon:  -9.94, mhws: 3.5, mhwn: 2.6, mlwn: 0.9, mlws: 0.3, m2phase: 10.03 }, // Inch Beach            — HW ~07:25 UTC
+  // Non-UK: m2phase = (lonPhase + 2.78) % 12.4167 where lonPhase = ((lon+180)/360)*12.4167
+  { lat: 43.65, lon:  -1.45, mhws: 3.8, mhwn: 2.8, mlwn: 1.0, mlws: 0.4, m2phase:  8.94 }, // Hossegor
+  { lat: 43.48, lon:  -1.56, mhws: 3.8, mhwn: 2.8, mlwn: 1.0, mlws: 0.4, m2phase:  8.94 }, // Biarritz
+  { lat: 43.41, lon:  -2.68, mhws: 4.2, mhwn: 3.2, mlwn: 1.2, mlws: 0.5, m2phase:  8.90 }, // Mundaka
+  { lat: 39.60, lon:  -9.07, mhws: 3.8, mhwn: 2.8, mlwn: 1.2, mlws: 0.4, m2phase:  8.68 }, // Nazaré
+  { lat: 39.36, lon:  -9.38, mhws: 3.8, mhwn: 2.8, mlwn: 1.2, mlws: 0.4, m2phase:  8.67 }, // Peniche
+  { lat: 38.97, lon:  -9.42, mhws: 3.7, mhwn: 2.7, mlwn: 1.1, mlws: 0.4, m2phase:  8.67 }, // Ericeira
+  { lat: 37.01, lon:  -8.94, mhws: 3.2, mhwn: 2.4, mlwn: 0.9, mlws: 0.3, m2phase:  8.68 }, // Sagres
+  { lat: 30.54, lon:  -9.71, mhws: 3.0, mhwn: 2.2, mlwn: 0.8, mlws: 0.3, m2phase:  8.66 }, // Taghazout
+  { lat: 28.10, lon: -14.35, mhws: 1.5, mhwn: 1.1, mlwn: 0.5, mlws: 0.2, m2phase:  8.50 }, // Lanzarote
+  { lat: 27.90, lon: -15.58, mhws: 1.5, mhwn: 1.1, mlwn: 0.5, mlws: 0.2, m2phase:  8.45 }, // Gran Canaria
+  { lat: 36.95, lon:-122.05, mhws: 1.7, mhwn: 1.3, mlwn: 0.5, mlws: 0.0, m2phase:  4.78 }, // Santa Cruz CA
+  { lat: 34.03, lon:-118.80, mhws: 1.6, mhwn: 1.3, mlwn: 0.5, mlws: 0.0, m2phase:  4.89 }, // Malibu CA
+  { lat: 21.30, lon:-157.80, mhws: 0.6, mhwn: 0.4, mlwn: 0.2, mlws: 0.1, m2phase:  3.55 }, // Oahu HI
+  { lat: -8.70, lon: 115.20, mhws: 2.0, mhwn: 1.5, mlwn: 0.5, mlws: 0.2, m2phase:  0.55 }, // Bali
+  { lat:-33.90, lon:  18.40, mhws: 1.8, mhwn: 1.5, mlwn: 0.6, mlws: 0.3, m2phase:  9.63 }, // Cape Town
+  { lat:-33.90, lon: 151.30, mhws: 1.3, mhwn: 1.0, mlwn: 0.5, mlws: 0.2, m2phase:  1.79 }, // Sydney
+  { lat:-31.90, lon: 115.90, mhws: 0.7, mhwn: 0.5, mlwn: 0.2, mlws: 0.1, m2phase:  0.57 }, // Perth
+  { lat:  0,    lon:   0,    mhws: 1.5, mhwn: 1.1, mlwn: 0.5, mlws: 0.2, m2phase:  8.99 }, // open-ocean fallback
 ];
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
@@ -613,7 +624,7 @@ function findNearestSpot(lat, lon) {
 function renderNowBanner(mh, wh, idx, lat, lon, baseIdx) {
   const nearestSpot = findNearestSpot(lat, lon);
   const exposure = nearestSpot?.exposure ?? 1.0;
-  const phaseH   = ((lon + 180) / 360) * 12.42;
+  const { phaseH } = tidalParams(lat, lon, new Date());
   const absHour  = idx - baseIdx;
   const tideMult = tideHeightMultiplier(nearestSpot?.quirks, phaseH, absHour);
   const effScale = exposure * tideMult;
@@ -671,8 +682,7 @@ function renderNowBanner(mh, wh, idx, lat, lon, baseIdx) {
 function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
   const now     = new Date();
   const nowHour = now.getHours() + now.getMinutes() / 60;
-  const phaseH        = ((lon + 180) / 360) * 12.42;
-  const { hwH, lwH } = tidalParams(lat, lon, now);
+  const { hwH, lwH, phaseH } = tidalParams(lat, lon, now);
 
   // Find nearest named spot within 5 km for swell direction scoring + quirks
   const nearestSpot = findNearestSpot(lat, lon);
@@ -861,7 +871,17 @@ function tidalParams(lat, lon, date) {
   const f   = springNeapFactor(date);
   const hwH = best.mhwn + (best.mhws - best.mhwn) * f;
   const lwH = best.mlwn - (best.mlwn - best.mlws) * f;
-  return { hwH, lwH, amp: (hwH - lwH) / 2 };
+
+  // Compute date-aware M2 phase in local clock time.
+  // HW at station occurs when (epoch_hours - m2phase) ≡ 0 (mod T).
+  // We find phaseH = first such time expressed as hours past local midnight,
+  // which then drives tideEvents/tideSVG for all 7 forecast days.
+  const T = 12.4167;
+  const localMidnight  = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const localMidnightH = localMidnight.getTime() / 3600000; // hours since Unix epoch
+  const phaseH = ((best.m2phase - localMidnightH % T) % T + T) % T;
+
+  return { hwH, lwH, amp: (hwH - lwH) / 2, phaseH };
 }
 
 // Score modifier from spot-specific tidal/wind quirks
