@@ -2,7 +2,8 @@ name: Update tide data
 
 on:
   schedule:
-    # Run daily at 05:30 UTC so fresh 7-day predictions are ready each morning
+    # Run daily at 05:30 UTC so fresh 7-day predictions are ready each morning.
+    # Stormglass free tier = 10 requests/day — we fetch exactly 10 UK/Ireland nodes.
     - cron: '30 5 * * *'
   workflow_dispatch:
 
@@ -14,32 +15,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Fetch tide extremes from WorldTides API
+      - name: Fetch tide extremes from Stormglass API
         env:
-          WORLDTIDES_KEY: ${{ secrets.WORLDTIDES_KEY }}
+          STORMGLASS_KEY: ${{ secrets.STORMGLASS_KEY }}
         run: |
           set -euo pipefail
 
-          TODAY=$(date -u +%Y-%m-%d)
+          START=$(date -u +%s)
+          END=$((START + 7 * 86400))
 
-          # UK/Ireland tidal reference nodes — must match TIDAL_NODES in app.js.
-          # Fetch 7 days of high/low tide extremes for each.
-          # Each request costs 1 WorldTides credit (1 credit = up to 7 days).
+          # 10 UK/Ireland tidal reference nodes — fits exactly within the free
+          # 10-request/day Stormglass limit.  Perranporth, Tiree, Lahinch and
+          # Inch Beach are omitted; the app falls back to their nearest neighbour
+          # here (Newquay, Portrush, Bundoran, Bundoran respectively).
           NODES=(
             "51.21,-4.11"   # Ilfracombe / N Devon
             "51.45,-3.18"   # Cardiff / Bristol Channel
             "50.83,-4.54"   # Bude
-            "50.41,-5.08"   # Newquay
-            "50.35,-5.15"   # Perranporth
+            "50.41,-5.08"   # Newquay  (also covers Perranporth)
             "50.57,-4.87"   # Polzeath / Padstow
             "50.07,-5.70"   # Sennen / Land's End
             "54.58,-0.97"   # Saltburn
             "58.59,-3.52"   # Thurso
-            "56.50,-6.92"   # Tiree
-            "55.20,-6.66"   # Portrush
-            "54.48,-8.28"   # Bundoran
-            "52.93,-9.34"   # Lahinch
-            "52.14,-9.94"   # Inch Beach
+            "55.20,-6.66"   # Portrush  (also covers Tiree via fallback)
+            "54.48,-8.28"   # Bundoran  (also covers Lahinch & Inch Beach)
           )
 
           NODES_JSON="[]"
@@ -51,25 +50,29 @@ jobs:
             echo "Fetching lat=$lat lon=$lon …"
 
             resp=$(curl -sf --max-time 15 \
-              "https://www.worldtides.info/api/v3?extremes&lat=${lat}&lon=${lon}&days=7&date=${TODAY}&key=${WORLDTIDES_KEY}" \
-              || echo '{"status":0}')
+              -H "Authorization: ${STORMGLASS_KEY}" \
+              "https://api.stormglass.io/v2/tide/extremes/point?lat=${lat}&lng=${lon}&start=${START}&end=${END}" \
+              || echo '{}')
 
-            status=$(echo "$resp" | jq -r '.status // 0')
+            count=$(echo "$resp" | jq -r '(.data // []) | length')
 
-            if [ "$status" = "200" ]; then
+            if [ "$count" -gt 0 ] 2>/dev/null; then
               extremes=$(echo "$resp" | jq -c \
-                '[.extremes[] | {dt: .dt, type: .type, height: (.height * 100 | round / 100)}]')
+                '[.data[] | {
+                   time: .time,
+                   type: (if .type == "high" then "High" else "Low" end),
+                   height: (.height * 100 | round / 100)
+                 }]')
               node_obj=$(jq -n \
                 --argjson lat  "$lat" \
                 --argjson lon  "$lon" \
                 --argjson extr "$extremes" \
                 '{lat: $lat, lon: $lon, extremes: $extr}')
               NODES_JSON=$(echo "$NODES_JSON" | jq -c --argjson n "$node_obj" '. + [$n]')
-              count=$(echo "$extremes" | jq 'length')
               echo "  ✓ $count events"
               OK=$((OK + 1))
             else
-              echo "  ✗ status=$status (skipped)"
+              echo "  ✗ no data ($(echo "$resp" | jq -r '.errors // "unknown error"'))"
               FAIL=$((FAIL + 1))
             fi
           done

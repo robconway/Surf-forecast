@@ -992,7 +992,7 @@ function tideEvents(phaseH, hwH, lwH, dayOff) {
   return events.sort((a, b) => a.hour - b.hour).map(e => ({ ...e, time: fmtH(e.hour) }));
 }
 
-// Returns HW/LW events for a given calendar day from the WorldTides-fetched data
+// Returns HW/LW events for a given calendar day from the Stormglass-fetched data
 // (tides.json).  dayOff: 0 = today, 1 = tomorrow, …  Returns the same
 // {type, hour, height, time} shape as tideEvents(), or null when no data is
 // available for this location/day (so callers can fall back to tideEvents()).
@@ -1016,11 +1016,12 @@ function resolvedTideEvents(lat, lon, dayOff) {
 
   const events = best.extremes
     .filter(e => {
-      const ms = e.dt * 1000;
+      // Stormglass stores the event time as an ISO 8601 string (e.time).
+      const ms = new Date(e.time).getTime();
       return ms >= dayStart.getTime() && ms < dayEnd.getTime();
     })
     .map(e => {
-      const dt   = new Date(e.dt * 1000);
+      const dt   = new Date(e.time);
       const hour = dt.getHours() + dt.getMinutes() / 60;
       return {
         type:   e.type === 'High' ? 'H' : 'L',
