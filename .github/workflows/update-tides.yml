@@ -2,14 +2,19 @@ name: Update tide data
 
 on:
   schedule:
-    # Run every Monday and Thursday at 05:30 UTC.
-    # Each run fetches 5 days of data starting from yesterday midnight UTC,
-    # giving a 1-day look-back buffer (catches early-morning events in all
-    # time zones) and a ~2-day forward overlap before the next run.
-    # 2 runs/week × 10 nodes = 10 requests per run — exactly within the
-    # Stormglass free-tier limit of 10 requests/day.
+    # Mon & Thu 05:30 UTC — UK & Ireland nodes (10 requests)
     - cron: '30 5 * * 1,4'
+    # Tue & Fri 05:30 UTC — International nodes (10 European + 7 global, split
+    #   so each day stays within the free 10-requests/day limit)
+    - cron: '30 5 * * 2,5'
   workflow_dispatch:
+    inputs:
+      node_set:
+        description: 'Which nodes to fetch (leave blank to auto-detect from day)'
+        required: false
+        default: ''
+        type: choice
+        options: ['', 'uk', 'european', 'global']
 
 jobs:
   update:
@@ -25,16 +30,25 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Start from midnight UTC yesterday so local-time events that fall
-          # before the runner's wall-clock (e.g. a 00:11 BST low water) are
-          # always captured.  Fetch 5 days: yesterday + today + 3 days ahead.
-          START=$(date -u -d 'yesterday 00:00' +%s)
-          END=$((START + 5 * 86400))
-          echo "Window: $(date -u -d @$START +%Y-%m-%d) → $(date -u -d @$END +%Y-%m-%d)"
+          # Determine which node set to run.
+          # Scheduled: Mon/Thu → uk, Tue → european, Fri → global.
+          # Manual: use the workflow_dispatch input, or default to uk.
+          DOW=$(date -u +%u)   # 1=Mon … 7=Sun
+          INPUT_SET="${{ github.event.inputs.node_set }}"
 
-          # 10 UK/Ireland tidal reference nodes — exactly 10 Stormglass
-          # requests per run, matching the free-tier daily limit.
-          NODES=(
+          if [ -n "$INPUT_SET" ]; then
+            NODE_SET="$INPUT_SET"
+          elif [ "$DOW" = "2" ]; then
+            NODE_SET="european"
+          elif [ "$DOW" = "5" ]; then
+            NODE_SET="global"
+          else
+            NODE_SET="uk"
+          fi
+          echo "Node set: $NODE_SET (day=$DOW)"
+
+          # ── Node definitions ──────────────────────────────────────────────
+          UK_NODES=(
             "51.21,-4.11"   # Ilfracombe / N Devon
             "51.45,-3.18"   # Cardiff / Bristol Channel
             "50.83,-4.54"   # Bude
@@ -43,11 +57,50 @@ jobs:
             "50.07,-5.70"   # Sennen / Land's End
             "54.58,-0.97"   # Saltburn
             "58.59,-3.52"   # Thurso
-            "55.20,-6.66"   # Portrush  (covers Tiree via fallback)
+            "55.20,-6.66"   # Portrush  (covers Tiree)
             "54.48,-8.28"   # Bundoran  (covers Lahinch & Inch Beach)
           )
 
-          NODES_JSON="[]"
+          # Europe, Africa and Atlantic islands — 10 nodes, fits one day's quota
+          EUROPEAN_NODES=(
+            "52.93,-9.34"   # Lahinch
+            "52.14,-9.94"   # Inch Beach
+            "43.65,-1.45"   # Hossegor
+            "43.41,-2.68"   # Mundaka
+            "39.60,-9.07"   # Nazaré
+            "39.36,-9.38"   # Peniche
+            "38.97,-9.42"   # Ericeira
+            "37.01,-8.94"   # Sagres
+            "30.54,-9.71"   # Taghazout
+            "28.10,-14.35"  # Lanzarote
+          )
+
+          # Rest of world — 7 nodes (within one day's quota)
+          GLOBAL_NODES=(
+            "27.90,-15.58"  # Gran Canaria
+            "36.95,-122.05" # Santa Cruz CA
+            "34.03,-118.80" # Malibu CA
+            "21.30,-157.80" # Oahu HI
+            "-8.70,115.20"  # Bali
+            "-33.90,18.40"  # Cape Town
+            "-33.90,151.30" # Sydney / Gold Coast
+          )
+
+          case "$NODE_SET" in
+            uk)           NODES=("${UK_NODES[@]}") ;;
+            european)     NODES=("${EUROPEAN_NODES[@]}") ;;
+            global)       NODES=("${GLOBAL_NODES[@]}") ;;
+            *)            echo "Unknown node set: $NODE_SET"; exit 1 ;;
+          esac
+
+          # ── Fetch ─────────────────────────────────────────────────────────
+          # Start from yesterday midnight UTC so early-morning events (e.g. a
+          # 00:11 BST low water) are always within the window.
+          START=$(date -u -d 'yesterday 00:00' +%s)
+          END=$((START + 5 * 86400))   # 5 days: yesterday + today + 3 ahead
+          echo "Window: $(date -u -d @$START +%Y-%m-%d) → $(date -u -d @$END +%Y-%m-%d)"
+
+          NEW_NODES_JSON="[]"
           OK=0; FAIL=0
 
           for node in "${NODES[@]}"; do
@@ -76,7 +129,7 @@ jobs:
                 --argjson lon  "$lon" \
                 --argjson extr "$extremes" \
                 '{lat: $lat, lon: $lon, extremes: $extr}')
-              NODES_JSON=$(echo "$NODES_JSON" | jq -c --argjson n "$node_obj" '. + [$n]')
+              NEW_NODES_JSON=$(echo "$NEW_NODES_JSON" | jq -c --argjson n "$node_obj" '. + [$n]')
               echo "✓ $count events"
               OK=$((OK + 1))
             else
@@ -90,13 +143,30 @@ jobs:
             exit 1
           fi
 
+          # ── Merge with existing tides.json ────────────────────────────────
+          # Keep nodes from previous runs that aren't in the current batch,
+          # and replace/add any nodes that are.  This lets UK, European and
+          # global batches all live in a single file across different run days.
+          if [ -f tides.json ] && jq -e '.nodes | length > 0' tides.json > /dev/null 2>&1; then
+            EXISTING_NODES=$(jq '.nodes' tides.json)
+          else
+            EXISTING_NODES='[]'
+          fi
+
+          MERGED=$(jq -n \
+            --argjson existing "$EXISTING_NODES" \
+            --argjson new      "$NEW_NODES_JSON" \
+            '($existing + $new)
+             | group_by([.lat, .lon])
+             | map(last)')
+
           UPDATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           jq -n \
             --arg     updated "$UPDATED" \
-            --argjson nodes   "$NODES_JSON" \
+            --argjson nodes   "$MERGED" \
             '{updated: $updated, nodes: $nodes}' > tides.json
 
-          echo "Done — $OK nodes OK, $FAIL failed. Updated: $UPDATED"
+          echo "Done — $OK fetched, $FAIL failed. Total nodes in file: $(jq '.nodes|length' tides.json)"
 
       - name: Commit if changed
         run: |
@@ -107,6 +177,6 @@ jobs:
             echo "No changes to commit"
           else
             git commit -m "chore: update tide predictions [skip ci]"
-            git pull --rebase origin ${{ github.ref_name }}
+            git pull --rebase origin main
             git push
           fi

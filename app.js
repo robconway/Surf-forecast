@@ -858,13 +858,11 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
     html += `<div class="day-tide-strip">
       ${dataExpired ? '' : tideSVG(svgPhaseH, svgHwH, svgLwH, svgDayOff, d === 0 ? now : null, 340, 44)}
       <div class="day-tide-events">
-        ${dataExpired
-          ? `<span class="dte-unavailable">Tide times unavailable — workflow needs to run</span>`
-          : events.map(e => `
-              <span class="dte ${e.type === 'H' ? 'dte-hw' : 'dte-lw'}">
-                ${e.type === 'H' ? '▲' : '▼'} ${e.time}
-                <span class="dte-ht">${e.height}m</span>
-              </span>`).join('')}
+        ${dataExpired ? '' : events.map(e => `
+          <span class="dte ${e.type === 'H' ? 'dte-hw' : 'dte-lw'}">
+            ${e.type === 'H' ? '▲' : '▼'} ${e.time}
+            <span class="dte-ht">${e.height}m</span>
+          </span>`).join('')}
       </div>
     </div>`;
 
