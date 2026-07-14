@@ -457,6 +457,9 @@ main { flex: 1; padding: 1.25rem 1.25rem 2.5rem; max-width: 820px; margin: 0 aut
 .dte-hw { color: #60a5fa; }
 .dte-lw { color: var(--muted); }
 .dte-ht { font-size: .68rem; font-weight: 400; color: var(--muted); }
+.dte-unavailable {
+  font-size: .68rem; color: var(--muted); font-style: italic;
+}
 
 /* ── Footer ─────────────────────────────────────────────────────────────────── */
 footer {

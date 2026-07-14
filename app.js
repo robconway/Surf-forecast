@@ -837,17 +837,18 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
     }
 
     // Tide strip at the bottom of each day.
-    // Prefer real API data from tides.json; fall back to the m2phase model.
+    // liveEvents: Array = real data, null = no nearby node (use calculation),
+    //             false = nearby node exists but data expired (show unavailable).
     const liveEvents = resolvedTideEvents(lat, lon, d);
-    const events     = liveEvents ?? tideEvents(phaseH, hwH, lwH, d);
+    const dataExpired = liveEvents === false;
+    const events = liveEvents || (dataExpired ? [] : tideEvents(phaseH, hwH, lwH, d));
 
-    // When real events are available, derive phaseH for the SVG curve from the
-    // actual first HW of that day so the curve aligns with the displayed times.
+    // When real events are available, derive phaseH + heights for the SVG curve
+    // from the actual HW events so the curve aligns with the displayed times.
     let svgPhaseH = phaseH, svgDayOff = d, svgHwH = hwH, svgLwH = lwH;
     if (liveEvents) {
       const firstHW = liveEvents.find(e => e.type === 'H');
       if (firstHW) { svgPhaseH = firstHW.hour; svgDayOff = 0; }
-      // Use the day's actual heights for the SVG amplitude when both are present
       const hwEvt = liveEvents.filter(e => e.type === 'H');
       const lwEvt = liveEvents.filter(e => e.type === 'L');
       if (hwEvt.length) svgHwH = Math.max(...hwEvt.map(e => parseFloat(e.height)));
@@ -855,13 +856,15 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
     }
 
     html += `<div class="day-tide-strip">
-      ${tideSVG(svgPhaseH, svgHwH, svgLwH, svgDayOff, d === 0 ? now : null, 340, 44)}
+      ${dataExpired ? '' : tideSVG(svgPhaseH, svgHwH, svgLwH, svgDayOff, d === 0 ? now : null, 340, 44)}
       <div class="day-tide-events">
-        ${events.map(e => `
-          <span class="dte ${e.type === 'H' ? 'dte-hw' : 'dte-lw'}">
-            ${e.type === 'H' ? '▲' : '▼'} ${e.time}
-            <span class="dte-ht">${e.height}m</span>
-          </span>`).join('')}
+        ${dataExpired
+          ? `<span class="dte-unavailable">Tide times unavailable — workflow needs to run</span>`
+          : events.map(e => `
+              <span class="dte ${e.type === 'H' ? 'dte-hw' : 'dte-lw'}">
+                ${e.type === 'H' ? '▲' : '▼'} ${e.time}
+                <span class="dte-ht">${e.height}m</span>
+              </span>`).join('')}
       </div>
     </div>`;
 
@@ -1000,9 +1003,15 @@ function tideEvents(phaseH, hwH, lwH, dayOff) {
 }
 
 // Returns HW/LW events for a given calendar day from the Stormglass-fetched data
-// (tides.json).  dayOff: 0 = today, 1 = tomorrow, …  Returns the same
-// {type, hour, height, time} shape as tideEvents(), or null when no data is
-// available for this location/day (so callers can fall back to tideEvents()).
+// (tides.json).  dayOff: 0 = today, 1 = tomorrow, …
+//
+// Return values:
+//   Array   — real events found; use them.
+//   null    — no fetched data for this location at all (international spot or
+//             tides.json not yet loaded); caller may fall back to tideEvents().
+//   false   — a nearby node exists in tides.json but has no events for this
+//             day (data has expired); caller must NOT fall back to the broken
+//             calculated model — show "unavailable" instead.
 function resolvedTideEvents(lat, lon, dayOff) {
   if (!tideData || !Array.isArray(tideData.nodes) || !tideData.nodes.length) return null;
 
@@ -1016,6 +1025,9 @@ function resolvedTideEvents(lat, lon, dayOff) {
   // giving good coverage for Irish spots (e.g. Inch Beach is ~280 km from
   // the Bundoran node).
   if (!best || bestDist > 300 || !Array.isArray(best.extremes)) return null;
+  // A nearby node exists — from here we own this location.  Even if events
+  // are missing for this day (stale data) we return false rather than null
+  // so the caller never falls back to the incorrect calculated model.
 
   // Stormglass heights are in metres relative to MSL.  Convert to approximate
   // Chart Datum by adding the nearest tidal node's mean sea level above CD,
@@ -1055,7 +1067,8 @@ function resolvedTideEvents(lat, lon, dayOff) {
     })
     .sort((a, b) => a.hour - b.hour);
 
-  return events.length > 0 ? events : null;
+  // false = nearby node exists but no events for this day (data expired)
+  return events.length > 0 ? events : false;
 }
 
 // nowDate is passed only for today so we can draw the "current" white dot
