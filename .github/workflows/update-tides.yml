@@ -2,11 +2,13 @@ name: Update tide data
 
 on:
   schedule:
-    # Run on the 1st and 15th of every month at 05:30 UTC.
-    # Each run fetches 16 days of data, so one run always overlaps the next —
-    # if a run fails, the previous data stays valid for the full 16-day window.
-    # 2 runs/month × 10 nodes = 20 Stormglass requests/month (free tier: 10/day).
-    - cron: '30 5 1,15 * *'
+    # Run every Monday and Thursday at 05:30 UTC.
+    # Each run fetches 5 days of data starting from yesterday midnight UTC,
+    # giving a 1-day look-back buffer (catches early-morning events in all
+    # time zones) and a ~2-day forward overlap before the next run.
+    # 2 runs/week × 10 nodes = 10 requests per run — exactly within the
+    # Stormglass free-tier limit of 10 requests/day.
+    - cron: '30 5 * * 1,4'
   workflow_dispatch:
 
 jobs:
@@ -23,24 +25,26 @@ jobs:
         run: |
           set -euo pipefail
 
-          START=$(date -u +%s)
-          END=$((START + 16 * 86400))   # 16 days per call
+          # Start from midnight UTC yesterday so local-time events that fall
+          # before the runner's wall-clock (e.g. a 00:11 BST low water) are
+          # always captured.  Fetch 5 days: yesterday + today + 3 days ahead.
+          START=$(date -u -d 'yesterday 00:00' +%s)
+          END=$((START + 5 * 86400))
+          echo "Window: $(date -u -d @$START +%Y-%m-%d) → $(date -u -d @$END +%Y-%m-%d)"
 
-          # 10 UK/Ireland tidal reference nodes.  Fetching 16 days per node in a
-          # single call keeps usage to 10 requests per run, well within the free
-          # tier's 10/day limit.  Perranporth, Tiree, Lahinch and Inch Beach are
-          # omitted; the app falls back to their nearest neighbour automatically.
+          # 10 UK/Ireland tidal reference nodes — exactly 10 Stormglass
+          # requests per run, matching the free-tier daily limit.
           NODES=(
             "51.21,-4.11"   # Ilfracombe / N Devon
             "51.45,-3.18"   # Cardiff / Bristol Channel
             "50.83,-4.54"   # Bude
-            "50.41,-5.08"   # Newquay  (also covers Perranporth)
+            "50.41,-5.08"   # Newquay  (covers Perranporth)
             "50.57,-4.87"   # Polzeath / Padstow
             "50.07,-5.70"   # Sennen / Land's End
             "54.58,-0.97"   # Saltburn
             "58.59,-3.52"   # Thurso
-            "55.20,-6.66"   # Portrush  (also covers Tiree via fallback)
-            "54.48,-8.28"   # Bundoran  (also covers Lahinch & Inch Beach)
+            "55.20,-6.66"   # Portrush  (covers Tiree via fallback)
+            "54.48,-8.28"   # Bundoran  (covers Lahinch & Inch Beach)
           )
 
           NODES_JSON="[]"
@@ -49,16 +53,16 @@ jobs:
           for node in "${NODES[@]}"; do
             lat="${node%%,*}"
             lon="${node##*,}"
-            echo "Fetching lat=$lat lon=$lon …"
+            echo -n "  lat=$lat lon=$lon … "
 
-            resp=$(curl -sf --max-time 15 \
+            resp=$(curl -sf --max-time 20 \
               -H "Authorization: ${STORMGLASS_KEY}" \
               "https://api.stormglass.io/v2/tide/extremes/point?lat=${lat}&lng=${lon}&start=${START}&end=${END}" \
               || echo '{}')
 
             count=$(echo "$resp" | jq -r '(.data // []) | length')
 
-            if [ "$count" -gt 0 ] 2>/dev/null; then
+            if [ "${count:-0}" -gt 0 ]; then
               extremes=$(echo "$resp" | jq -c \
                 '[.data[] | {
                    time: .time,
@@ -71,13 +75,18 @@ jobs:
                 --argjson extr "$extremes" \
                 '{lat: $lat, lon: $lon, extremes: $extr}')
               NODES_JSON=$(echo "$NODES_JSON" | jq -c --argjson n "$node_obj" '. + [$n]')
-              echo "  ✓ $count events"
+              echo "✓ $count events"
               OK=$((OK + 1))
             else
-              echo "  ✗ no data ($(echo "$resp" | jq -r '.errors // "unknown error"'))"
+              echo "✗ $(echo "$resp" | jq -r '.errors // .message // "unknown error"')"
               FAIL=$((FAIL + 1))
             fi
           done
+
+          if [ "$OK" -eq 0 ]; then
+            echo "All requests failed — not overwriting tides.json"
+            exit 1
+          fi
 
           UPDATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           jq -n \
