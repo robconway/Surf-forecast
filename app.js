@@ -533,6 +533,13 @@ async function loadTideData() {
     const data = await res.json();
     if (data && Array.isArray(data.nodes) && data.nodes.length > 0) {
       tideData = data;
+      // Warn in console if the data is more than 6 days old (workflow may have failed)
+      if (data.updated) {
+        const ageDays = (Date.now() - new Date(data.updated).getTime()) / 86400000;
+        if (ageDays > 6) {
+          console.warn(`[tides] data is ${ageDays.toFixed(1)} days old — workflow may not have run`);
+        }
+      }
       console.info('[tides] loaded', data.nodes.length, 'stations, updated', data.updated);
     }
   } catch (err) {
