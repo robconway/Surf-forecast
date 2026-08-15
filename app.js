@@ -59,10 +59,11 @@ const SURF_SPOTS = [
     quirks: { tide: 'pushing', tideBonus: 2, tideWindow: 2 } },
   { name: 'Crow Point',        lat: 51.0878, lon: -4.1925, facing: 270,
     noFoil: true, wingFoil: true,
-    notes: 'Wing foiling launch on the Taw/Torridge estuary — ideal on SW/S/SE winds 15–25 mph' },
+    wingTide: { window: 2 },
+    notes: 'Wing foiling on the Taw/Torridge estuary — SW/S/SE 15–25 mph, ±2h of high tide' },
   { name: 'Saunton Sands',     lat: 51.1000, lon: -4.2100, facing: 292, exposure: 0.55,
     offshore: [45, 135], closesOut: 1.9, ability: 'beginner-intermediate',
-    quirks: { tide: 'beforeHigh', tideWindow: 2, tideBonus: 2, tideBadHigh: true, windShelter: [315, 45] } },
+    quirks: { tide: 'aroundHigh', tideWindow: 2, tideBonus: 2, windShelter: [315, 45], windCrossBonus: 1 } },
   { name: 'Putsborough',       lat: 51.1406, lon: -4.2469, facing: 270, exposure: 0.75,
     offshore: [45, 135], closesOut: 1.2, ability: 'beginner-longboard',
     quirks: { tide: 'pushing', tideBonus: 2, tideBadHighWide: true, tideBadLow: true, tideWindow: 2, windShelter: [200, 260] } },
@@ -674,8 +675,9 @@ function renderNowBanner(mh, wh, idx, lat, lon, baseIdx) {
   const windDir = safeVal(wh.winddirection_10m, idx);
   const offshoreRange = nearestSpot?.offshore ?? null;
   const closesOut     = nearestSpot?.closesOut ?? null;
+  const tideOkForWing = wingTideOk(nearestSpot, phaseH, absHour);
   const stars = currentActivity === 'wing'
-    ? wingFoilStars(windSpd, windDir)
+    ? (tideOkForWing ? wingFoilStars(windSpd, windDir) : 0)
     : currentActivity === 'foil'
     ? (nearestSpot?.noFoil ? 0 : foilStars(waveH, wavePer, windSpd, windDir, waveDir, nearestSpot?.facing ?? null, offshoreRange))
     : surfStars(waveH, wavePer, windSpd, windDir, waveDir, nearestSpot?.facing ?? null, offshoreRange, closesOut);
@@ -697,13 +699,13 @@ function renderNowBanner(mh, wh, idx, lat, lon, baseIdx) {
       <span class="ns-dir">${dirName(windDir)}</span>
     </div>
     <div class="now-stat">
-      <span class="ns-label">km/h</span>
-      <span class="ns-value">${windSpd != null ? Math.round(windSpd) : '—'}<small>km/h</small></span>
-    </div>
-    <div class="now-stat">
       <span class="ns-label">Direction</span>
       <span class="ns-value ${wingDirOk ? 'wh-good' : 'wh-flat'}">${wingDirOk ? '✓ SW/S/SE' : '✗ Wrong dir'}</span>
     </div>
+    ${nearestSpot?.wingTide ? `<div class="now-stat">
+      <span class="ns-label">Tide</span>
+      <span class="ns-value ${tideOkForWing ? 'wh-good' : 'wh-flat'}">${tideOkForWing ? '✓ HW ±2h' : '✗ Low tide'}</span>
+    </div>` : ''}
     <div class="now-stat">
       <span class="ns-label">Need</span>
       <span class="ns-value" style="font-size:.8rem">SW/S/SE ≥15mph</span>
@@ -797,7 +799,7 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
       const closesOut     = nearestSpot?.closesOut ?? null;
       let rawScore;
       if (currentActivity === 'wing') {
-        rawScore = wingFoilScore(windSpd, windDir);
+        rawScore = wingTideOk(nearestSpot, phaseH, absHour) ? wingFoilScore(windSpd, windDir) : 0;
       } else if (currentActivity === 'foil') {
         rawScore = nearestSpot?.noFoil ? 0 : foilScore(waveH, wavePer, windSpd, windDir, waveDir, spotFacing, offshoreRange);
       } else {
@@ -805,7 +807,7 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
       }
       const score   = rawScore === 0 ? 0
         : currentActivity === 'wing' ? scoreToStars(rawScore)  // no tide quirk adj for wing
-        : rawScore + tideQuirkAdj(nearestSpot ? nearestSpot.quirks : null, phaseH, absHour, windSpd, windDir);
+        : rawScore + tideQuirkAdj(nearestSpot ? nearestSpot.quirks : null, phaseH, absHour, windSpd, windDir, offshoreRange);
       const stars   = currentActivity === 'wing' ? (rawScore === 0 ? 0 : score)
         : score === 0 ? 0 : scoreToStars(score);
 
@@ -828,7 +830,8 @@ function renderForecastGrid(mh, wh, baseIdx, lat, lon) {
 
       const slotWindMph = windSpd != null ? Math.round(windSpd * 0.621) : null;
       const slotWingDirOk = windDir != null && windDir >= 112 && windDir <= 248;
-      const slotWingOn = slotWingDirOk && windSpd != null && windSpd >= 24;
+      const slotTideOk = wingTideOk(nearestSpot, phaseH, absHour);
+      const slotWingOn = slotWingDirOk && windSpd != null && windSpd >= 24 && slotTideOk;
       html += `<div class="msw-row${isNow ? ' is-now' : ''}${isPast ? ' is-past' : ''}">
         <div class="msw-time">${slot.label}</div>
         <div class="msw-surf">
@@ -969,7 +972,7 @@ function tidalParams(lat, lon, date) {
 }
 
 // Score modifier from spot-specific tidal/wind quirks
-function tideQuirkAdj(quirks, phaseH, absHour, windSpd, windDir) {
+function tideQuirkAdj(quirks, phaseH, absHour, windSpd, windDir, offshoreRange = null) {
   if (!quirks) return 0;
   const T = 12.4167;
   const phaseFromHW = ((absHour - phaseH) % T + T) % T; // 0=HW, T/2=LW, T=next HW
@@ -981,6 +984,7 @@ function tideQuirkAdj(quirks, phaseH, absHour, windSpd, windDir) {
   let adj = 0;
 
   if (quirks.tide === 'beforeHigh' && isRising && (T - phaseFromHW) <= w) adj += (quirks.tideBonus ?? 2);
+  if (quirks.tide === 'aroundHigh' && distFromHW <= w)                    adj += (quirks.tideBonus ?? 2);
   if (quirks.tide === 'aroundLow'  && distFromLW <= w)                    adj += (quirks.tideBonus ?? 2);
   if (quirks.tide === 'pushing'    && isRising)                            adj += (quirks.tideBonus ?? 2);
 
@@ -995,6 +999,14 @@ function tideQuirkAdj(quirks, phaseH, absHour, windSpd, windDir) {
       : (windDir >= from && windDir <= to);
     if (sheltered) adj += 1;
   }
+
+  // Cross-shore bonus: some beaches (e.g. Saunton) also work well on cross winds
+  if (quirks.windCrossBonus && windDir != null && windSpd > 5 && offshoreRange) {
+    if (windClass(windSpd, windDir, null, offshoreRange) === 'wind-cross') {
+      adj += quirks.windCrossBonus;
+    }
+  }
+
   return adj;
 }
 
@@ -1013,6 +1025,7 @@ function tideHeightMultiplier(quirks, phaseH, absHour) {
   let mult = 1.0;
 
   if (quirks.tide === 'beforeHigh' && isRising && (T - phaseFromHW) <= w) mult *= 1.3;
+  if (quirks.tide === 'aroundHigh' && distFromHW <= w)                    mult *= 1.3;
   if (quirks.tide === 'aroundLow'  && distFromLW <= w)                    mult *= 1.2;
   if (quirks.tide === 'pushing'    && isRising)                            mult *= 1.15;
 
@@ -1249,6 +1262,16 @@ function foilScore(waveH, wavePer, windSpd, windDir, swellDir, spotFacing = null
 function foilStars(waveH, wavePer, windSpd, windDir, swellDir, spotFacing = null, offshoreRange = null) {
   const score = foilScore(waveH, wavePer, windSpd, windDir, swellDir, spotFacing, offshoreRange);
   return score === 0 ? 0 : scoreToStars(score);
+}
+
+// Returns true when wing foiling is viable at this spot given the tide phase.
+// Used for estuary spots (e.g. Crow Point) where launch is only possible ±N hours of HW.
+function wingTideOk(spot, phaseH, absHour) {
+  if (!spot?.wingTide) return true;
+  const T = 12.4167;
+  const phaseFromHW = ((absHour - phaseH) % T + T) % T;
+  const distFromHW  = Math.min(phaseFromHW, T - phaseFromHW);
+  return distFromHW <= (spot.wingTide.window ?? 2);
 }
 
 // Wing foiling: purely wind-driven. Good when SW/S/SE (≈113°–248°) ≥ 15 mph (24 km/h).
