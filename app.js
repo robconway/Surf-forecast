@@ -318,10 +318,14 @@ async function reverseGeocode(lat, lon) {
 const BIDEFORD_BAY_BUOY = { lat: 51.0584, lon: -4.2768 };
 
 async function fetchBuoyData() {
-  if (CCO_API_KEY) {
+  // CCO is Referer-locked to the GitHub Pages origin. Skip the live call
+  // elsewhere (localhost, custom domains) so we fail fast to buoy.json.
+  const onPages = /\.github\.io$/i.test(location.hostname);
+  if (CCO_API_KEY && onPages) {
     try {
       const res = await fetch(
-        `https://coastalmonitoring.org/observations/waves/latest.geojson?key=${CCO_API_KEY}`
+        `https://coastalmonitoring.org/observations/waves/latest.geojson?key=${CCO_API_KEY}`,
+        { signal: AbortSignal.timeout(6000) }
       );
       if (res.ok) {
         const geo = await res.json();
