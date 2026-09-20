@@ -317,13 +317,53 @@ async function reverseGeocode(lat, lon) {
 // the UI; lets us spot-check exposure/tide-multiplier assumptions over time.
 const BIDEFORD_BAY_BUOY = { lat: 51.0584, lon: -4.2768 };
 
+async function fetchBuoyData() {
+  // CCO is Referer-locked to the GitHub Pages origin. Skip the live call
+  // elsewhere (localhost, custom domains) so we fail fast to buoy.json.
+  const onPages = /\.github\.io$/i.test(location.hostname);
+  if (CCO_API_KEY && onPages) {
+    try {
+      const res = await fetch(
+        `https://coastalmonitoring.org/observations/waves/latest.geojson?key=${CCO_API_KEY}`,
+        { signal: AbortSignal.timeout(6000) }
+      );
+      if (res.ok) {
+        const geo = await res.json();
+        const feat = (geo.features || []).find(f => {
+          const vals = Object.values(f.properties || {});
+          return vals.some(v => String(v).toLowerCase().includes('bideford'));
+        });
+        if (feat) {
+          const p = feat.properties;
+          const hs = parseFloat(p.hs);
+          const tp = parseFloat(p.tp);
+          const dir = parseFloat(p.pdir);
+          return {
+            hs: Number.isFinite(hs) ? hs : null,
+            tp: Number.isFinite(tp) ? tp : null,
+            dir: Number.isFinite(dir) ? dir : null,
+          };
+        }
+      }
+    } catch (err) {
+      console.warn('[buoy] live CCO fetch failed:', err.message);
+    }
+  }
+  try {
+    const res = await fetch('./buoy.json?t=' + Math.floor(Date.now() / 1800000));
+    if (!res.ok) return null;
+    return res.json();
+  } catch (_) {
+    return null;
+  }
+}
+
 async function checkBuoySanity(lat, lon, nearestSpot, swellH, exposure) {
   try {
     if (haversine(lat, lon, BIDEFORD_BAY_BUOY.lat, BIDEFORD_BAY_BUOY.lon) > 15) return;
-    // buoy.json is written every 30 min by a GitHub Actions workflow — same origin, no CORS
-    const res = await fetch('./buoy.json?t=' + Math.floor(Date.now() / 1800000));
-    if (!res.ok) return;
-    const data = await res.json();
+    // Live CCO feed is CORS-open; buoy.json is a same-origin fallback if CCO is down.
+    const data = await fetchBuoyData();
+    if (!data) return;
     const buoyHs = data.hs;
     if (buoyHs == null) return;
     const buoyFt = Math.round(buoyHs * 3.281);
@@ -524,32 +564,9 @@ let currentModel    = localStorage.getItem('mlw_model')    || 'openmeteo';
 let currentActivity = localStorage.getItem('mlw_activity') || 'surf';
 let cachedRenderArgs = null;
 
-// Tide data fetched from tides.json (written daily by a GitHub Actions workflow
-// using the WorldTides API).  null until the file is loaded; falls back to the
-// m2phase tidal model when unavailable.
-let tideData = null;
-
-async function loadTideData() {
-  try {
-    // Cache-bust once per day so the browser always gets the day's fresh file.
-    const res = await fetch('./tides.json?t=' + Math.floor(Date.now() / 86400000));
-    if (!res.ok) return;
-    const data = await res.json();
-    if (data && Array.isArray(data.nodes) && data.nodes.length > 0) {
-      tideData = data;
-      // Warn in console if the data is more than 6 days old (workflow may have failed)
-      if (data.updated) {
-        const ageDays = (Date.now() - new Date(data.updated).getTime()) / 86400000;
-        if (ageDays > 6) {
-          console.warn(`[tides] data is ${ageDays.toFixed(1)} days old — workflow may not have run`);
-        }
-      }
-      console.info('[tides] loaded', data.nodes.length, 'stations, updated', data.updated);
-    }
-  } catch (err) {
-    console.warn('[tides] could not load tides.json:', err.message);
-  }
-}
+// HW/LW events derived from Open-Meteo sea_level_height_msl for the current
+// forecast. Empty until renderAll() runs; falls back to the m2phase model.
+let seaLevelEvents = [];
 const LAST_LOC_KEY = 'mlw_last_loc';
 
 async function loadForecast(lat, lon, name) {
@@ -567,7 +584,7 @@ async function reloadForecast() {
     const windModel = currentModel === 'gfs' ? '&models=gfs_seamless'
                     : currentModel === 'ecmwf' ? '&models=ecmwf_ifs025'
                     : '';
-    const vars = 'wave_height,wave_period,wave_direction,swell_wave_height,swell_wave_period';
+    const vars = 'wave_height,wave_period,wave_direction,swell_wave_height,swell_wave_period,sea_level_height_msl';
     const secVars = 'secondary_swell_wave_height,secondary_swell_wave_direction,secondary_swell_wave_period';
     const [mRes, wRes, sRes] = await Promise.all([
       fetch(`https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}&hourly=${vars}&timezone=auto&forecast_days=7`),
@@ -621,6 +638,7 @@ function renderAll(lat, lon, name, marine, weather) {
 
   const mh  = marine.hourly;
   const wh  = weather.hourly;
+  seaLevelEvents = extractSeaLevelEvents(mh.time, mh.sea_level_height_msl);
   const now = new Date();
 
   const todayStr = now.toISOString().slice(0, 10);
@@ -1053,73 +1071,72 @@ function tideEvents(phaseH, hwH, lwH, dayOff) {
   return events.sort((a, b) => a.hour - b.hour).map(e => ({ ...e, time: fmtH(e.hour) }));
 }
 
-// Returns HW/LW events for a given calendar day from the Stormglass-fetched data
-// (tides.json).  dayOff: 0 = today, 1 = tomorrow, …
+function pad2(n) { return String(n).padStart(2, '0'); }
+
+function localIsoDate(date) {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+
+function shiftIsoDate(iso, days) {
+  const [y, mo, d] = iso.split('-').map(Number);
+  return localIsoDate(new Date(y, mo - 1, d + days));
+}
+
+// Detect HW/LW from an hourly sea-level series. Peak time is refined with a
+// 3-point parabola so we get better than whole-hour resolution.
+function extractSeaLevelEvents(times, heights) {
+  const events = [];
+  if (!times || !heights) return events;
+  for (let i = 1; i < heights.length - 1; i++) {
+    const a = heights[i - 1], b = heights[i], c = heights[i + 1];
+    if (a == null || b == null || c == null) continue;
+    let type = null;
+    if (b > a && b >= c) type = 'H';
+    else if (b < a && b <= c) type = 'L';
+    else continue;
+    const denom = a - 2 * b + c;
+    let frac = 0;
+    if (Math.abs(denom) > 1e-6) {
+      frac = (a - c) / (2 * denom);
+      if (frac < -0.75 || frac > 0.75) frac = 0;
+    }
+    const m = String(times[i]).match(/^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/);
+    if (!m) continue;
+    let hour = parseInt(m[2], 10) + parseInt(m[3], 10) / 60 + frac;
+    let date = m[1];
+    if (hour < 0) { hour += 24; date = shiftIsoDate(date, -1); }
+    else if (hour >= 24) { hour -= 24; date = shiftIsoDate(date, 1); }
+    events.push({ type, date, hour });
+  }
+  return events;
+}
+
+// Returns HW/LW events for a given calendar day from Open-Meteo sea level.
+// Times come from the modelled curve; heights use the calibrated TIDAL_NODES
+// Chart Datum range (Open-Meteo heights are MSL and too damped inshore).
 //
 // Return values:
-//   Array   — real events found; use them.
-//   null    — no fetched data for this location at all (international spot or
-//             tides.json not yet loaded); caller may fall back to tideEvents().
-//   false   — a nearby node exists in tides.json but has no events for this
-//             day (data has expired); caller must NOT fall back to the broken
-//             calculated model — show "unavailable" instead.
+//   Array — extrema found for this day; use them.
+//   null  — no sea-level series (inland / API gap); caller falls back to tideEvents().
 function resolvedTideEvents(lat, lon, dayOff) {
-  if (!tideData || !Array.isArray(tideData.nodes) || !tideData.nodes.length) return null;
+  if (!seaLevelEvents.length) return null;
 
-  // Find the nearest fetched station (same haversine approach as TIDAL_NODES)
-  let best = null, bestDist = Infinity;
-  for (const n of tideData.nodes) {
-    const d = haversine(lat, lon, n.lat, n.lon);
-    if (d < bestDist) { bestDist = d; best = n; }
-  }
-  // 300 km threshold keeps international spots on the m2phase fallback while
-  // giving good coverage for Irish spots (e.g. Inch Beach is ~280 km from
-  // the Bundoran node).
-  if (!best || bestDist > 300 || !Array.isArray(best.extremes)) return null;
-  // A nearby node exists — from here we own this location.  Even if events
-  // are missing for this day (stale data) we return false rather than null
-  // so the caller never falls back to the incorrect calculated model.
+  const ref = new Date();
+  const day = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() + dayOff);
+  const dayStr = localIsoDate(day);
+  const { hwH, lwH } = tidalParams(lat, lon, day);
 
-  // Stormglass heights are in metres relative to MSL.  Convert to approximate
-  // Chart Datum by adding the nearest tidal node's mean sea level above CD,
-  // estimated as (MHWN + MLWN) / 2 — gives heights that match tide-table
-  // convention (positive, comparable to the TIDAL_NODES datums).
-  let mslOffset = 0;
-  {
-    let nearNode = TIDAL_NODES[0], nearDist = Infinity;
-    for (const n of TIDAL_NODES) {
-      const d = haversine(lat, lon, n.lat, n.lon);
-      if (d < nearDist) { nearDist = d; nearNode = n; }
-    }
-    mslOffset = (nearNode.mhwn + nearNode.mlwn) / 2;
-  }
-
-  // Build local-time window for the requested day (midnight → next midnight).
-  const ref      = new Date();
-  const dayStart = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() + dayOff);
-  const dayEnd   = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() + dayOff + 1);
-
-  const events = best.extremes
-    .filter(e => {
-      // Stormglass stores the event time as an ISO 8601 string (e.time).
-      const ms = new Date(e.time).getTime();
-      return ms >= dayStart.getTime() && ms < dayEnd.getTime();
-    })
-    .map(e => {
-      const dt     = new Date(e.time);
-      const hour   = dt.getHours() + dt.getMinutes() / 60;
-      const htCD   = Math.max(0, e.height + mslOffset); // Chart Datum height, always ≥ 0
-      return {
-        type:   e.type === 'High' ? 'H' : 'L',
-        hour,
-        height: htCD.toFixed(1),
-        time:   fmtH(hour),
-      };
-    })
+  const events = seaLevelEvents
+    .filter(e => e.date === dayStr)
+    .map(e => ({
+      type: e.type,
+      hour: e.hour,
+      height: (e.type === 'H' ? hwH : lwH).toFixed(1),
+      time: fmtH(e.hour),
+    }))
     .sort((a, b) => a.hour - b.hour);
 
-  // false = nearby node exists but no events for this day (data expired)
-  return events.length > 0 ? events : false;
+  return events.length ? events : null;
 }
 
 // nowDate is passed only for today so we can draw the "current" white dot
@@ -1594,10 +1611,6 @@ document.getElementById('mswForecast').addEventListener('click', e => {
 
 // Fetch crowd bias in the background on startup (updates mlw_global_bias cache)
 fetchGlobalBias();
-
-// Load WorldTides-fetched tide predictions (tides.json) once at startup so
-// they are available when the first forecast renders.
-loadTideData();
 
 // Reopen the last-viewed location automatically instead of showing the splash screen
 (function restoreLastLocation() {

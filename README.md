@@ -12,7 +12,7 @@ Built for a bit of fun. A surf forecast progressive web app for North Devon and 
 - **MSW-style grid** — DAWN / AM / NOON / PM / DUSK time slots with star ratings
 - **Secondary swell** — pulled from the MeteoFrance wave model
 - **Now banner** — current conditions at a glance with face-height range
-- **Live buoy data** — Bideford Bay (CCO station 97) updated every 30 min via GitHub Actions, shown in the footer when viewing North Devon spots
+- **Live buoy data** — Bideford Bay (CCO station 97) fetched in the browser, shown in the footer when viewing North Devon spots
 - **Per-spot scoring** — each spot has a facing direction, offshore wind range, exposure factor, tide quirks, and a closeout threshold; scoring adjusts accordingly
 - **Tide curve** — SVG tide chart per slot, generated from harmonic tidal data
 - **Wind model switcher** — Open-Meteo Best Match, GFS, or ECMWF
@@ -47,14 +47,15 @@ Each North Devon spot includes:
 | [Open-Meteo Weather API](https://open-meteo.com/en/docs) | Wind speed & direction (Best Match / GFS / ECMWF) |
 | [MeteoFrance via Open-Meteo](https://open-meteo.com) | Secondary swell train |
 | [CCO Bideford Bay buoy](https://coastalmonitoring.org) | Real-time significant wave height, peak period & direction |
+| [Open-Meteo Marine sea level](https://open-meteo.com/en/docs/marine-weather-api) | High/low tide times (heights from local Chart Datum nodes) |
 
 ---
 
 ## Architecture
 
-- No framework, no build step — a single `app.js`, `style.css`, `index.html`
+- No framework, no build step, no GitHub Actions — a single `app.js`, `style.css`, `index.html`
 - GitHub Pages serves the static files directly from `main`
-- A GitHub Actions workflow (`.github/workflows/update-buoy.yml`) fetches CCO buoy data every 30 minutes and commits `buoy.json` to the repo
+- Buoy and tide data are fetched in the browser (CCO + Open-Meteo). `buoy.json` is only a stale fallback if CCO is down
 - Cache-busting via `?v=N` query strings on CSS/JS assets
 
 ---
